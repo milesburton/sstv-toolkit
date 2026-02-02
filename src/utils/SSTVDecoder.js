@@ -85,12 +85,20 @@ export class SSTVDecoder {
     const ctx = canvas.getContext('2d');
     const imageData = ctx.createImageData(canvas.width, canvas.height);
 
-    // Find first sync pulse to align
-    let position = this.findSyncPulse(samples, 0);
+    // Find first sync pulse to align - skip VIS code area
+    const visCodeDuration = 0.5; // VIS code is about 500ms
+    const searchStart = Math.floor(visCodeDuration * this.sampleRate);
+    let position = this.findSyncPulse(samples, searchStart);
 
     if (position === -1) {
-      throw new Error('Could not find sync pulse');
+      console.warn('Could not find first sync pulse, trying from beginning...');
+      position = this.findSyncPulse(samples, 0);
+      if (position === -1) {
+        throw new Error('Could not find sync pulse. Make sure this is a valid SSTV transmission.');
+      }
     }
+
+    console.log(`Starting decode at position ${position}, sample rate: ${this.sampleRate}`);
 
     // Decode each line
     for (let y = 0; y < this.mode.lines && position < samples.length; y++) {
@@ -189,14 +197,30 @@ export class SSTVDecoder {
   }
 
   findSyncPulse(samples, startPos) {
-    const syncDuration = 0.005; // ~5ms
-    const samplesPerCheck = Math.floor(syncDuration * this.sampleRate);
+    const syncDuration = Math.max(0.004, this.mode?.syncPulse || 0.005);
+    const samplesPerCheck = Math.floor(this.sampleRate * 0.001); // Check every 1ms
 
-    for (let i = startPos; i < samples.length - samplesPerCheck; i += samplesPerCheck) {
+    for (let i = startPos; i < samples.length - Math.floor(syncDuration * this.sampleRate); i += samplesPerCheck) {
       const freq = this.detectFrequency(samples, i, syncDuration);
 
-      if (Math.abs(freq - FREQ_SYNC) < 50) {
-        return i;
+      // More lenient sync detection - allow 100 Hz tolerance
+      if (Math.abs(freq - FREQ_SYNC) < 100) {
+        // Verify it's actually a sync by checking duration
+        let syncValid = true;
+
+        // Sample a few points through the sync pulse
+        for (let j = 0; j < 3; j++) {
+          const checkPos = i + Math.floor((syncDuration * this.sampleRate * j) / 3);
+          const checkFreq = this.detectFrequency(samples, checkPos, syncDuration / 3);
+          if (Math.abs(checkFreq - FREQ_SYNC) > 150) {
+            syncValid = false;
+            break;
+          }
+        }
+
+        if (syncValid) {
+          return i;
+        }
       }
     }
 
@@ -209,22 +233,56 @@ export class SSTVDecoder {
 
     if (endIdx - startIdx < 10) return 0;
 
-    // Simple zero-crossing frequency detection
-    let crossings = 0;
-    let lastSign = samples[startIdx] >= 0;
+    // Use Goertzel algorithm for more accurate frequency detection
+    // Test for common SSTV frequencies
+    const testFreqs = [1200, 1500, 1900, 2300];
+    let maxMag = 0;
+    let detectedFreq = 1500;
 
-    for (let i = startIdx + 1; i < endIdx; i++) {
-      const sign = samples[i] >= 0;
-      if (sign !== lastSign) {
-        crossings++;
-        lastSign = sign;
+    for (const freq of testFreqs) {
+      const magnitude = this.goertzel(samples, startIdx, endIdx, freq);
+      if (magnitude > maxMag) {
+        maxMag = magnitude;
+        detectedFreq = freq;
       }
     }
 
-    const actualDuration = (endIdx - startIdx) / this.sampleRate;
-    const frequency = (crossings / 2) / actualDuration;
+    // If we have a strong signal, interpolate for more accuracy
+    if (maxMag > 0.1) {
+      // Fine-tune around the detected frequency
+      const step = 50;
+      for (let f = detectedFreq - step; f <= detectedFreq + step; f += 10) {
+        const magnitude = this.goertzel(samples, startIdx, endIdx, f);
+        if (magnitude > maxMag) {
+          maxMag = magnitude;
+          detectedFreq = f;
+        }
+      }
+    }
 
-    return frequency;
+    return detectedFreq;
+  }
+
+  // Goertzel algorithm for single-frequency DFT
+  goertzel(samples, startIdx, endIdx, targetFreq) {
+    const N = endIdx - startIdx;
+    const k = Math.round(N * targetFreq / this.sampleRate);
+    const omega = (2 * Math.PI * k) / N;
+    const coeff = 2 * Math.cos(omega);
+
+    let s1 = 0;
+    let s2 = 0;
+
+    for (let i = startIdx; i < endIdx; i++) {
+      const s0 = samples[i] + coeff * s1 - s2;
+      s2 = s1;
+      s1 = s0;
+    }
+
+    const realPart = s1 - s2 * Math.cos(omega);
+    const imagPart = s2 * Math.sin(omega);
+
+    return Math.sqrt(realPart * realPart + imagPart * imagPart) / N;
   }
 
   async decodeWithMode(audioFile, modeName) {

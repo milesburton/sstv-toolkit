@@ -167,7 +167,16 @@ function App() {
                 Drag & drop {mode === 'encode' ? 'an image' : 'an audio file'} here
               </p>
               <p className="or">or</p>
-              <button type="button" className="select-btn">Select File</button>
+              <button
+                type="button"
+                className="select-btn"
+                onClick={(e) => {
+                  e.preventDefault();
+                  document.getElementById('file-input').click();
+                }}
+              >
+                Select File
+              </button>
               <p className="hint">
                 {mode === 'encode'
                   ? 'Supported: JPG, PNG, GIF, WebP'
