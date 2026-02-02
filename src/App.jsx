@@ -2,6 +2,7 @@ import { useState } from 'react';
 import './App.css';
 import { SSTVEncoder, SSTV_MODES } from './utils/SSTVEncoder';
 import { SSTVDecoder } from './utils/SSTVDecoder';
+import ExampleSelector from './components/ExampleSelector';
 
 function App() {
   const [mode, setMode] = useState('encode');
@@ -176,6 +177,10 @@ function App() {
           )}
         </label>
       </section>
+
+      {!processing && !result && (
+        <ExampleSelector mode={mode} onSelectExample={processFile} />
+      )}
 
       {error && (
         <div className="error">
