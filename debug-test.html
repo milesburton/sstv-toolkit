@@ -11,15 +11,15 @@
     <canvas id="resultCanvas" width="320" height="240"></canvas>
 
     <script type="module">
-        import { SSTVEncoder } from './src/utils/SSTVEncoder.js';
         import { SSTVDecoder } from './src/utils/SSTVDecoder.js';
+        import { SSTVEncoder } from './src/utils/SSTVEncoder.js';
 
         function log(msg) {
             document.getElementById('log').textContent += msg + '\n';
             console.log(msg);
         }
 
-        window.runTest = async function() {
+        window.runTest = async () => {
             document.getElementById('log').textContent = '';
             log('Starting test...');
 

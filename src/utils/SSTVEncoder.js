@@ -131,7 +131,9 @@ export class SSTVEncoder {
 
   addImageData(samples, imageData) {
     const { data, width, height } = imageData;
-    console.log(`🖼️  addImageData() called: ${width}x${height}, colorFormat=${this.mode.colorFormat}`);
+    console.log(
+      `🖼️  addImageData() called: ${width}x${height}, colorFormat=${this.mode.colorFormat}`
+    );
     console.log(`  data array length: ${data.length}, expected: ${width * height * 4}`);
 
     for (let y = 0; y < height; y++) {
@@ -187,7 +189,9 @@ export class SSTVEncoder {
     const timePerPixel = this.mode.scanTime / width;
 
     if (y === 0) {
-      console.log(`📺 addScanLineYUV() called for line ${y}, width=${width}, timePerPixel=${timePerPixel.toFixed(6)}s`);
+      console.log(
+        `📺 addScanLineYUV() called for line ${y}, width=${width}, timePerPixel=${timePerPixel.toFixed(6)}s`
+      );
     }
 
     for (let x = 0; x < width; x++) {
@@ -204,7 +208,9 @@ export class SSTVEncoder {
 
       // Debug first few pixels
       if (y < 3 && x < 5) {
-        console.log(`📺 Encoder [${x},${y}]: RGB=(${r},${g},${b}) → Y=${Y.toFixed(0)} → freq=${freq.toFixed(0)}Hz`);
+        console.log(
+          `📺 Encoder [${x},${y}]: RGB=(${r},${g},${b}) → Y=${Y.toFixed(0)} → freq=${freq.toFixed(0)}Hz`
+        );
       }
 
       this.addTone(samples, freq, timePerPixel);

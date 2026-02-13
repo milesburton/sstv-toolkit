@@ -15,14 +15,18 @@ export class SSTVDecoder {
   async decodeAudio(audioFile) {
     // CRITICAL: Force AudioContext to use 48kHz to match encoder
     // Browser default is often 44.1kHz which causes timing mismatch
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)({
+      sampleRate: 48000,
+    });
     const arrayBuffer = await audioFile.arrayBuffer();
     const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
 
     // Get audio samples
     const samples = audioBuffer.getChannelData(0);
     this.sampleRate = audioBuffer.sampleRate;
-    console.log(`Decoder using sample rate: ${this.sampleRate} Hz (AudioContext: ${audioContext.sampleRate} Hz)`);
+    console.log(
+      `Decoder using sample rate: ${this.sampleRate} Hz (AudioContext: ${audioContext.sampleRate} Hz)`
+    );
 
     // Detect VIS code to determine mode
     this.mode = this.detectMode(samples);
@@ -99,7 +103,7 @@ export class SSTVDecoder {
 
     // Find first sync pulse to align - skip VIS code area
     // VIS code: leader(300ms) + break(10ms) + start(30ms) + 8bits(240ms) + stop(30ms) = ~610ms
-    const visCodeDuration = 0.7; // Skip past VIS code with margin
+    const visCodeDuration = 0.61; // Match actual VIS code duration
     const searchStart = Math.floor(visCodeDuration * this.sampleRate);
     let position = this.findSyncPulse(samples, searchStart);
 
