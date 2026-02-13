@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<body>
+    <h1>Check Browser AudioContext Sample Rate</h1>
+    <button onclick="check()">Check</button>
+    <pre id="result"></pre>
+
+    <script>
+        function check() {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            document.getElementById('result').textContent =
+                `Browser AudioContext default sample rate: ${ctx.sampleRate} Hz\n\n` +
+                `This is the rate the browser will use, regardless of the WAV file's sample rate.`;
+        }
+    </script>
+</body>
+</html>

@@ -13,13 +13,16 @@ export class SSTVDecoder {
   }
 
   async decodeAudio(audioFile) {
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    // CRITICAL: Force AudioContext to use 48kHz to match encoder
+    // Browser default is often 44.1kHz which causes timing mismatch
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });
     const arrayBuffer = await audioFile.arrayBuffer();
     const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
 
     // Get audio samples
     const samples = audioBuffer.getChannelData(0);
     this.sampleRate = audioBuffer.sampleRate;
+    console.log(`Decoder using sample rate: ${this.sampleRate} Hz (AudioContext: ${audioContext.sampleRate} Hz)`);
 
     // Detect VIS code to determine mode
     this.mode = this.detectMode(samples);
