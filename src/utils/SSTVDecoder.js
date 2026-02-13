@@ -386,11 +386,12 @@ export class SSTVDecoder {
         freq = this.detectFrequencyRange(samples, pos, availableTime);
       }
 
-      // Map frequency to component value (0-255)
-      let value = ((freq - FREQ_BLACK) / (FREQ_WHITE - FREQ_BLACK)) * 255;
-      value = Math.max(0, Math.min(255, Math.round(value)));
+      // Map frequency to component value (video range: 16-240)
+      // Must match the encoder's mapping: (chroma - 16) / (240 - 16) = normalized
+      const normalized = (freq - FREQ_BLACK) / (FREQ_WHITE - FREQ_BLACK);
+      let value = 16 + normalized * (240 - 16);
+      value = Math.max(16, Math.min(240, Math.round(value)));
 
-      // Store as-is (0-255), decoder will handle the video range offsets
       const chromaValue = value;
 
       // Store chrominance for two pixels (expanding from half resolution)
