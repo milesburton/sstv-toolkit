@@ -184,9 +184,9 @@ export class SSTVDecoder {
           const sepDuration = 0.0045;
           const sepFreq = this.detectFrequency(samples, sepStart, sepDuration);
 
-          // Separator: Even lines = 1500Hz (U), Odd lines = 2300Hz (V)
-          const isULine = Math.abs(sepFreq - FREQ_BLACK) < Math.abs(sepFreq - FREQ_WHITE);
-          this.currentChromaType = isULine ? 'U' : 'V';
+          // Separator: Even lines = 1500Hz (V/R-Y), Odd lines = 2300Hz (U/B-Y)
+          const isVLine = Math.abs(sepFreq - FREQ_BLACK) < Math.abs(sepFreq - FREQ_WHITE);
+          this.currentChromaType = isVLine ? 'V' : 'U';
 
           position += Math.floor(sepDuration * this.sampleRate);
 
@@ -414,36 +414,43 @@ export class SSTVDecoder {
 
   convertYUVtoRGB(imageData, chromaU, chromaV) {
     // Convert YUV to RGB using ITU-R BT.601 standard
-    // Process ALL lines (both even Y lines and odd lines)
-    for (let y = 0; y < this.mode.lines; y++) {
+    // Process line pairs: even line has V (R-Y), odd line has U (B-Y)
+    // Both lines in a pair use the same chrominance values
+    for (let y = 0; y < this.mode.lines; y += 2) {
+      // For this line pair, get V from even line and U from odd line
+      const evenLine = y;
+      const oddLine = Math.min(y + 1, this.mode.lines - 1);
+
       for (let x = 0; x < this.mode.width; x++) {
-        const idx = (y * this.mode.width + x) * 4;
+        // Get chrominance values from the line pair
+        const evenChromaIdx = evenLine * this.mode.width + x;
+        const oddChromaIdx = oddLine * this.mode.width + x;
 
-        // Get Y (already stored in imageData as R component)
-        const Y = imageData.data[idx];
+        const V = chromaV[evenChromaIdx] || 0; // V from even line
+        const U = chromaU[oddChromaIdx] || 0;  // U from odd line
 
-        // For chrominance, use the data from the previous even line
-        // Even lines (0,2,4...) and their corresponding odd lines (1,3,5...) share chrominance
-        const evenLineY = Math.floor(y / 2) * 2;
-        const chromaIdx = evenLineY * this.mode.width + x;
+        // Apply to both lines in the pair
+        for (let ly = evenLine; ly <= oddLine && ly < this.mode.lines; ly++) {
+          const idx = (ly * this.mode.width + x) * 4;
 
-        const U = chromaU[chromaIdx] || 0;
-        const V = chromaV[chromaIdx] || 0;
+          // Get Y (already stored in imageData as R component)
+          const Y = imageData.data[idx];
 
-        // ITU-R BT.601 YUV to RGB conversion
-        let R = Y + 1.13983 * V;
-        let G = Y - 0.39465 * U - 0.5806 * V;
-        let B = Y + 2.03211 * U;
+          // ITU-R BT.601 YUV to RGB conversion
+          let R = Y + 1.13983 * V;
+          let G = Y - 0.39465 * U - 0.5806 * V;
+          let B = Y + 2.03211 * U;
 
-        // Clamp to valid range
-        R = Math.max(0, Math.min(255, Math.round(R)));
-        G = Math.max(0, Math.min(255, Math.round(G)));
-        B = Math.max(0, Math.min(255, Math.round(B)));
+          // Clamp to valid range
+          R = Math.max(0, Math.min(255, Math.round(R)));
+          G = Math.max(0, Math.min(255, Math.round(G)));
+          B = Math.max(0, Math.min(255, Math.round(B)));
 
-        // Update pixel
-        imageData.data[idx] = R;
-        imageData.data[idx + 1] = G;
-        imageData.data[idx + 2] = B;
+          // Update pixel
+          imageData.data[idx] = R;
+          imageData.data[idx + 1] = G;
+          imageData.data[idx + 2] = B;
+        }
       }
     }
   }

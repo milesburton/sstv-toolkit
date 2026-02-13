@@ -198,7 +198,7 @@ export class SSTVEncoder {
     }
 
     // Step 2: Separator pulse (4.5ms) - alternates between lines
-    // Even lines: 1500Hz (U follows), Odd lines: 2300Hz (V follows)
+    // Even lines: 1500Hz (V/R-Y follows), Odd lines: 2300Hz (U/B-Y follows)
     const sepFreq = y % 2 === 0 ? FREQ_BLACK : FREQ_WHITE;
     this.addTone(samples, sepFreq, SEPARATOR_TIME);
 
@@ -206,8 +206,8 @@ export class SSTVEncoder {
     this.addTone(samples, FREQ_BLACK, PORCH_TIME);
 
     // Step 4: Send chrominance at half horizontal resolution (44ms total)
-    // Even lines: U (B-Y), Odd lines: V (R-Y)
-    const isULine = y % 2 === 0;
+    // Even lines: V (R-Y) averaged for 2 lines, Odd lines: U (B-Y) averaged for 2 lines
+    const isVLine = y % 2 === 0;
 
     for (let x = 0; x < width; x += 2) {
       // Average two adjacent pixels for chroma
@@ -223,7 +223,7 @@ export class SSTVEncoder {
       const U = 0.492 * (b - Y); // B-Y component
       const V = 0.877 * (r - Y); // R-Y component
 
-      const chromaValue = isULine ? U : V;
+      const chromaValue = isVLine ? V : U;
 
       // Map chrominance to frequency range
       // Chrominance ranges from approximately -111 to +111 for U, -156 to +156 for V
