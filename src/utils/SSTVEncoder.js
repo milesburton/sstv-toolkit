@@ -47,9 +47,10 @@ const FREQ_VIS_START = 1900; // Hz - VIS start bit
 const FREQ_VIS_STOP = 1200;  // Hz - VIS stop bit
 
 export class SSTVEncoder {
-  constructor(mode = 'ROBOT36', sampleRate = 44100) {
+  constructor(mode = 'ROBOT36', sampleRate = 48000) {
     this.mode = SSTV_MODES[mode];
     this.sampleRate = sampleRate;
+    console.log(`Encoder initialized: ${this.mode.name}, sample rate: ${this.sampleRate} Hz`);
   }
 
   async encodeImage(imageFile) {

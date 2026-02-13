@@ -109,6 +109,7 @@ export class SSTVDecoder {
     }
 
     console.log(`Starting decode at position ${position}, sample rate: ${this.sampleRate}`);
+    console.log(`Mode: ${this.mode.name}, dimensions: ${this.mode.width}x${this.mode.lines}`);
 
     // Decode each line
     for (let y = 0; y < this.mode.lines && position < samples.length; y++) {
