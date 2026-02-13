@@ -43,12 +43,13 @@ export class SSTVDecoder {
     const searchSamples = Math.min(samples.length, this.sampleRate * 2);
 
     // Find VIS start bit (1900 Hz for ~30ms)
-    // Step by ~1ms instead of every sample for performance
-    const step = Math.floor(this.sampleRate * 0.001);
+    // Step by ~0.5ms for better resolution to catch VIS start
+    const step = Math.floor(this.sampleRate * 0.0005);
     for (let i = 0; i < searchSamples - 1000; i += step) {
       const freq = this.detectFrequency(samples, i, 0.03);
 
-      if (Math.abs(freq - 1900) < 50) {
+      // More lenient VIS start detection (1900 Hz ± 75 Hz)
+      if (Math.abs(freq - 1900) < 75) {
         // Found potential VIS start, decode the mode bits
         const visCode = this.decodeVIS(samples, i);
 
@@ -99,17 +100,25 @@ export class SSTVDecoder {
       imageData.data[i + 3] = 255; // A - critical for visibility
     }
 
-    // Find first sync pulse to align - skip VIS code area
-    // VIS code: leader(300ms) + break(10ms) + start(30ms) + 8bits(240ms) + stop(30ms) = ~610ms
-    const visCodeDuration = 0.61; // Match actual VIS code duration
-    const searchStart = Math.floor(visCodeDuration * this.sampleRate);
-    let position = this.findSyncPulse(samples, searchStart);
+    // Find first sync pulse to align - search from multiple positions
+    // Try starting from several positions to find the first real line sync
+    const searchPositions = [
+      Math.floor(0.61 * this.sampleRate), // Standard VIS duration
+      Math.floor(0.5 * this.sampleRate),  // Earlier position
+      Math.floor(0.8 * this.sampleRate),  // Later position
+      0                                     // From beginning if all else fails
+    ];
+
+    let position = -1;
+    for (const startPos of searchPositions) {
+      position = this.findSyncPulse(samples, startPos);
+      if (position !== -1) {
+        break;
+      }
+    }
 
     if (position === -1) {
-      position = this.findSyncPulse(samples, 0);
-      if (position === -1) {
-        throw new Error('Could not find sync pulse. Make sure this is a valid SSTV transmission.');
-      }
+      throw new Error('Could not find sync pulse. Make sure this is a valid SSTV transmission.');
     }
 
     // Decode each line
@@ -289,14 +298,14 @@ export class SSTVDecoder {
 
   findSyncPulse(samples, startPos, endPos = samples.length) {
     const syncDuration = Math.max(0.004, this.mode?.syncPulse || 0.005);
-    const samplesPerCheck = Math.floor(this.sampleRate * 0.0005); // Check every 0.5ms for better resolution
+    const samplesPerCheck = Math.floor(this.sampleRate * 0.0002); // Check every 0.2ms for finer resolution
     const searchEnd = Math.min(endPos, samples.length - Math.floor(syncDuration * this.sampleRate));
 
     for (let i = startPos; i < searchEnd; i += samplesPerCheck) {
       const freq = this.detectFrequency(samples, i, syncDuration);
 
-      // More lenient sync detection - allow 150 Hz tolerance for real-world signals
-      if (Math.abs(freq - FREQ_SYNC) < 150) {
+      // More lenient sync detection - allow 200 Hz tolerance for real-world signals
+      if (Math.abs(freq - FREQ_SYNC) < 200) {
         // Verify it's actually a sync by checking duration
         let syncValid = true;
 
