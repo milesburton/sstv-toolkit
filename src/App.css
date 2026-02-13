@@ -15,7 +15,7 @@ body {
 }
 
 .app {
-  max-width: 1400px;
+  max-width: 1200px;
   margin: 0 auto;
   padding: 2rem;
 }
@@ -39,24 +39,29 @@ header p {
 
 /* Side-by-side layout */
 main.side-by-side {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  padding: 2rem;
+  margin-bottom: 2rem;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 2rem;
-  margin-bottom: 2rem;
 }
 
 @media (max-width: 1024px) {
   main.side-by-side {
     grid-template-columns: 1fr;
+    padding: 1.5rem;
   }
 }
 
 /* Panel styling */
 .panel {
-  background: white;
-  border-radius: 12px;
-  padding: 2rem;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+  box-shadow: none;
 }
 
 .panel-header {
@@ -64,6 +69,20 @@ main.side-by-side {
   margin-bottom: 1.5rem;
   padding-bottom: 1rem;
   border-bottom: 2px solid #e0e0e0;
+}
+
+.panel:first-child .panel-header {
+  border-right: 1px solid #e0e0e0;
+  padding-right: 1rem;
+  margin-right: -1rem;
+}
+
+@media (max-width: 1024px) {
+  .panel:first-child .panel-header {
+    border-right: none;
+    padding-right: 0;
+    margin-right: 0;
+  }
 }
 
 .panel-header h2 {
