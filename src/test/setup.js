@@ -17,7 +17,7 @@ global.AudioContext = class {
       sampleRate,
       numberOfChannels: channels,
       duration: length / sampleRate,
-      getChannelData: (channel) => {
+      getChannelData: (_channel) => {
         // Return actual samples from the array buffer
         const samples = new Float32Array(length);
         const view = new DataView(arrayBuffer);
@@ -29,7 +29,7 @@ global.AudioContext = class {
         }
 
         return samples;
-      }
+      },
     };
 
     return Promise.resolve(audioBuffer);

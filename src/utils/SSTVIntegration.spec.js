@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'vitest';
-import { SSTVEncoder } from './SSTVEncoder';
+import { describe, expect, it } from 'vitest';
 import { SSTVDecoder } from './SSTVDecoder';
+import { SSTVEncoder } from './SSTVEncoder';
 
 describe('SSTV Integration Tests', () => {
   describe('Encode → Decode Round Trip', () => {

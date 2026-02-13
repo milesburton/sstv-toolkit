@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import './App.css';
-import { SSTVEncoder, SSTV_MODES } from './utils/SSTVEncoder';
 import { SSTVDecoder } from './utils/SSTVDecoder';
+import { SSTV_MODES, SSTVEncoder } from './utils/SSTVEncoder';
 
 function App() {
   // Encoder state
@@ -65,7 +65,7 @@ function App() {
       setEncodeResult({
         blob: audioBlob,
         url: URL.createObjectURL(audioBlob),
-        filename: `sstv_${selectedMode.toLowerCase()}_${Date.now()}.wav`
+        filename: `sstv_${selectedMode.toLowerCase()}_${Date.now()}.wav`,
       });
     } catch (err) {
       setEncodeError(err.message);
@@ -128,7 +128,7 @@ function App() {
 
       setDecodeResult({
         url: imageDataUrl,
-        filename: `sstv_decoded_${Date.now()}.png`
+        filename: `sstv_decoded_${Date.now()}.png`,
       });
     } catch (err) {
       setDecodeError(err.message);
@@ -226,9 +226,7 @@ function App() {
             </div>
           )}
 
-          {encodeError && (
-            <div className="error">❌ {encodeError}</div>
-          )}
+          {encodeError && <div className="error">❌ {encodeError}</div>}
 
           {encodeResult && (
             <div className="result">
@@ -256,9 +254,7 @@ function App() {
           </div>
 
           <div className="mode-options">
-            <p className="auto-detect-note">
-              🔍 Automatic mode detection via VIS code
-            </p>
+            <p className="auto-detect-note">🔍 Automatic mode detection via VIS code</p>
           </div>
 
           <section
@@ -302,9 +298,7 @@ function App() {
             </label>
           </section>
 
-          {decodeError && (
-            <div className="error">❌ {decodeError}</div>
-          )}
+          {decodeError && <div className="error">❌ {decodeError}</div>}
 
           {decodeResult && (
             <div className="result">
@@ -326,17 +320,35 @@ function App() {
       <div className="info-section">
         <h3>ℹ️ About SSTV</h3>
         <ul>
-          <li><strong>Encode:</strong> Convert images to audio signals for radio transmission</li>
-          <li><strong>Decode:</strong> Extract images from SSTV audio (automatic mode detection via VIS code)</li>
-          <li><strong>Modes:</strong> Robot 36 (fast, 36s), Martin M1 (high quality, 114s), Scottie S1 (balanced, 110s)</li>
-          <li><strong>Privacy:</strong> All processing happens in your browser - no data sent to servers</li>
-          <li><strong>Use Cases:</strong> Amateur radio, emergency communications, ISS contact, digital archaeology</li>
+          <li>
+            <strong>Encode:</strong> Convert images to audio signals for radio transmission
+          </li>
+          <li>
+            <strong>Decode:</strong> Extract images from SSTV audio (automatic mode detection via
+            VIS code)
+          </li>
+          <li>
+            <strong>Modes:</strong> Robot 36 (fast, 36s), Martin M1 (high quality, 114s), Scottie S1
+            (balanced, 110s)
+          </li>
+          <li>
+            <strong>Privacy:</strong> All processing happens in your browser - no data sent to
+            servers
+          </li>
+          <li>
+            <strong>Use Cases:</strong> Amateur radio, emergency communications, ISS contact,
+            digital archaeology
+          </li>
         </ul>
       </div>
 
       <footer>
         <p>
-          <a href="https://github.com/milesburton/sstv-toolkit" target="_blank" rel="noopener noreferrer">
+          <a
+            href="https://github.com/milesburton/sstv-toolkit"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
             View on GitHub
           </a>
           {' • '}

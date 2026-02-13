@@ -1,6 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { SSTVDecoder } from './SSTVDecoder';
-import { SSTV_MODES } from './SSTVEncoder';
 
 describe('SSTVDecoder', () => {
   let decoder;

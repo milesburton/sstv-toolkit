@@ -1,7 +1,8 @@
 // Script to generate example images for SSTV testing
+
+import fs from 'node:fs';
+import path from 'node:path';
 import { createCanvas } from 'canvas';
-import fs from 'fs';
-import path from 'path';
 
 const outputDir = './public/examples';
 
@@ -23,7 +24,7 @@ function generateTestPattern() {
     '#00C000', // Green
     '#C000C0', // Magenta
     '#C00000', // Red
-    '#0000C0'  // Blue
+    '#0000C0', // Blue
   ];
 
   const barWidth = 320 / colors.length;

@@ -6,19 +6,19 @@ export const examples = {
       name: 'SSTV Test Pattern',
       description: 'Classic SMPTE color bars test pattern',
       path: '/examples/test-pattern.png',
-      preview: '/examples/test-pattern.png'
+      preview: '/examples/test-pattern.png',
     },
     {
       name: 'Sample Photo',
       description: 'Low-res landscape for quick testing',
       path: '/examples/sample-photo.png',
-      preview: '/examples/sample-photo.png'
-    }
+      preview: '/examples/sample-photo.png',
+    },
   ],
   audio: [
     // Audio examples will be generated from the image examples above
     // Users can encode the test patterns and use those for testing decoding
-  ]
+  ],
 };
 
 // Helper to load example file

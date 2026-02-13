@@ -45,7 +45,7 @@ export class SSTVDecoder {
         const visCode = this.decodeVIS(samples, i);
 
         // Find matching mode
-        for (const [key, mode] of Object.entries(SSTV_MODES)) {
+        for (const [_key, mode] of Object.entries(SSTV_MODES)) {
           if (mode.visCode === visCode) {
             console.log(`Detected SSTV mode: ${mode.name}`);
             return mode;
@@ -68,7 +68,7 @@ export class SSTVDecoder {
       const bitValue = freq < 1200 ? 1 : 0; // 1100 Hz = 1, 1300 Hz = 0
 
       if (bitValue) {
-        visCode |= (1 << bit);
+        visCode |= 1 << bit;
       }
 
       idx += Math.floor(0.03 * this.sampleRate);
@@ -88,7 +88,7 @@ export class SSTVDecoder {
     // Initialize all pixels to black with full opacity
     // This ensures pixels that don't get decoded are opaque rather than transparent
     for (let i = 0; i < imageData.data.length; i += 4) {
-      imageData.data[i] = 0;     // R
+      imageData.data[i] = 0; // R
       imageData.data[i + 1] = 0; // G
       imageData.data[i + 2] = 0; // B
       imageData.data[i + 3] = 255; // A - critical for visibility
@@ -174,7 +174,9 @@ export class SSTVDecoder {
 
       // Debug logging for first few pixels
       if (y < 3 && x < 5) {
-        console.log(`RGB Pixel [${x},${y}] ch${channel}: freq=${freq.toFixed(0)}Hz → value=${value}`);
+        console.log(
+          `RGB Pixel [${x},${y}] ch${channel}: freq=${freq.toFixed(0)}Hz → value=${value}`
+        );
       }
 
       const idx = (y * this.mode.width + x) * 4;
@@ -242,7 +244,7 @@ export class SSTVDecoder {
       // For now, use Y for all RGB channels (grayscale)
       // Full color Robot decoding would need separate Y, R-Y, B-Y scans
       const idx = (y * this.mode.width + x) * 4;
-      imageData.data[idx] = Y;     // R
+      imageData.data[idx] = Y; // R
       imageData.data[idx + 1] = Y; // G
       imageData.data[idx + 2] = Y; // B
       imageData.data[idx + 3] = 255; // Alpha
@@ -255,7 +257,11 @@ export class SSTVDecoder {
     const syncDuration = Math.max(0.004, this.mode?.syncPulse || 0.005);
     const samplesPerCheck = Math.floor(this.sampleRate * 0.001); // Check every 1ms
 
-    for (let i = startPos; i < samples.length - Math.floor(syncDuration * this.sampleRate); i += samplesPerCheck) {
+    for (
+      let i = startPos;
+      i < samples.length - Math.floor(syncDuration * this.sampleRate);
+      i += samplesPerCheck
+    ) {
       const freq = this.detectFrequency(samples, i, syncDuration);
 
       // More lenient sync detection - allow 100 Hz tolerance
@@ -321,7 +327,7 @@ export class SSTVDecoder {
   // Goertzel algorithm for single-frequency DFT
   goertzel(samples, startIdx, endIdx, targetFreq) {
     const N = endIdx - startIdx;
-    const k = Math.round(N * targetFreq / this.sampleRate);
+    const k = Math.round((N * targetFreq) / this.sampleRate);
     const omega = (2 * Math.PI * k) / N;
     const coeff = 2 * Math.cos(omega);
 

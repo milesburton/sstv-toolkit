@@ -4,17 +4,17 @@ const SSTV_MODES = {
   ROBOT36: {
     name: 'Robot 36',
     visCode: 0x08,
-    scanTime: 0.150, // seconds per line
+    scanTime: 0.15, // seconds per line
     lines: 240,
     width: 320,
     colorScan: true,
     syncPulse: 0.009,
     syncPorch: 0.003,
-    colorFormat: 'YUV'
+    colorFormat: 'YUV',
   },
   MARTIN1: {
     name: 'Martin M1',
-    visCode: 0x2C,
+    visCode: 0x2c,
     scanTime: 0.146, // seconds per line
     lines: 256,
     width: 320,
@@ -22,11 +22,11 @@ const SSTV_MODES = {
     syncPulse: 0.004862,
     syncPorch: 0.000572,
     separatorPulse: 0.000572,
-    colorFormat: 'RGB'
+    colorFormat: 'RGB',
   },
   SCOTTIE1: {
     name: 'Scottie S1',
-    visCode: 0x3C,
+    visCode: 0x3c,
     scanTime: 0.138,
     lines: 256,
     width: 320,
@@ -34,17 +34,17 @@ const SSTV_MODES = {
     syncPulse: 0.009,
     syncPorch: 0.0015,
     separatorPulse: 0.0015,
-    colorFormat: 'RGB'
-  }
+    colorFormat: 'RGB',
+  },
 };
 
-const FREQ_SYNC = 1200;  // Hz - sync pulse
+const FREQ_SYNC = 1200; // Hz - sync pulse
 const FREQ_BLACK = 1500; // Hz - black level
 const FREQ_WHITE = 2300; // Hz - white level
 const FREQ_VIS_BIT1 = 1100; // Hz - VIS bit 1
 const FREQ_VIS_BIT0 = 1300; // Hz - VIS bit 0
 const FREQ_VIS_START = 1900; // Hz - VIS start bit
-const FREQ_VIS_STOP = 1200;  // Hz - VIS stop bit
+const FREQ_VIS_STOP = 1200; // Hz - VIS stop bit
 
 export class SSTVEncoder {
   constructor(mode = 'ROBOT36', sampleRate = 48000) {
@@ -221,7 +221,7 @@ export class SSTVEncoder {
     let offset = 44;
     for (let i = 0; i < samples.length; i++) {
       const sample = Math.max(-1, Math.min(1, samples[i]));
-      view.setInt16(offset, sample * 0x7FFF, true);
+      view.setInt16(offset, sample * 0x7fff, true);
       offset += 2;
     }
 

@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { SSTVEncoder, SSTV_MODES } from './SSTVEncoder';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { SSTV_MODES, SSTVEncoder } from './SSTVEncoder';
 
 describe('SSTVEncoder', () => {
   let encoder;
@@ -58,7 +58,7 @@ describe('SSTVEncoder', () => {
       encoder.addVISCode(samples);
 
       // VIS code should take about 300ms
-      const expectedDuration = 0.3 + 0.01 + 0.03 + (8 * 0.03) + 0.03;
+      const expectedDuration = 0.3 + 0.01 + 0.03 + 8 * 0.03 + 0.03;
       const expectedSamples = Math.floor(expectedDuration * encoder.sampleRate);
 
       expect(samples.length).toBeGreaterThan(expectedSamples * 0.9);
