@@ -1,63 +1,70 @@
-# SSTV Encoder/Decoder
+# SSTV Toolkit
 
-A web-based SSTV (Slow Scan Television) encoder and decoder built with React. Convert images to SSTV audio signals and decode SSTV transmissions directly in your browser.
+A web-based SSTV (Slow Scan Television) encoder and decoder. Convert images to SSTV audio signals and decode SSTV transmissions directly in your browser - no installation required!
 
-## Features
+## 🌐 Use the Web App
+
+**Try it now:** [https://milesburton.github.io/sstv-toolkit/](https://milesburton.github.io/sstv-toolkit/)
+
+### Features
+- ✅ Encode images into SSTV audio (WAV format)
+- ✅ Decode SSTV audio back into images
+- ✅ Support for Robot 36, Martin M1, and Scottie S1 modes
+- ✅ Automatic mode detection via VIS code
+- ✅ Drag & drop interface
+- ✅ Built-in example images for testing
+- ✅ Works entirely in your browser - no backend required
+- ✅ Complete privacy - no data sent to servers
+
+## 🎯 Quick Start
 
 ### Encoding (Image → Audio)
-- Drag & drop image files or use file picker
-- **Built-in example images** - Test pattern and sample graphics
-- Support for multiple SSTV modes:
-  - Robot 36 (320x240)
-  - Martin M1 (320x256)
-  - Scottie S1 (320x256)
-- Generates WAV audio files
-- Play audio directly in browser or download
+1. Visit [https://milesburton.github.io/sstv-toolkit/](https://milesburton.github.io/sstv-toolkit/)
+2. Select your SSTV mode (Robot 36, Martin M1, or Scottie S1)
+3. Drag & drop an image or click to select
+4. Download the generated WAV audio file
+5. Transmit via radio or save for later!
 
 ### Decoding (Audio → Image)
-- Drag & drop audio files (WAV, MP3, OGG)
-- Automatic SSTV mode detection via VIS code
-- Decodes image from SSTV signal
-- Download decoded images as PNG
+1. Upload your SSTV audio file (WAV, MP3, or OGG)
+2. Mode is automatically detected from the VIS code
+3. View and download the decoded image as PNG
 
-### Example Files
-- Click example images to instantly test encoding
-- SMPTE color bars test pattern
-- Sample gradient photo
+## 📡 What is SSTV?
 
-## How It Works
+**Slow Scan Television (SSTV)** is a picture transmission method used mainly by amateur radio operators to transmit and receive static pictures via radio.
 
-**SSTV** is a picture transmission method used mainly by amateur radio operators to transmit and receive static pictures via radio. Each pixel is encoded as an audio frequency:
-- 1200 Hz = Sync pulse
-- 1500 Hz = Black level
-- 2300 Hz = White level
+### How It Works
+Each pixel is encoded as an audio frequency:
+- **1200 Hz** = Sync pulse
+- **1500 Hz** = Black level  
+- **2300 Hz** = White level
 
-## Technology
+Images are transmitted line-by-line as analog audio signals, which can be received and decoded back into pictures.
+
+## 🎨 SSTV Modes
+
+| Mode | Resolution | Scan Time | Color |
+|------|-----------|-----------|-------|
+| Robot 36 | 320x240 | ~36s | YUV |
+| Martin M1 | 320x256 | ~114s | RGB |
+| Scottie S1 | 320x256 | ~110s | RGB |
+
+## 🛠️ Technology
 
 - **React** - UI framework
 - **Vite** - Build tool
 - **Web Audio API** - Audio generation and processing
 - **Canvas API** - Image manipulation
-- Pure frontend - no backend required
+- **Pure Frontend** - No backend required, runs entirely in browser
 
-## Usage
-
-### Encoding an Image
-1. Click "Encode (Image → Audio)"
-2. Select SSTV mode (Robot 36, Martin M1, or Scottie S1)
-3. Drag & drop an image or click "Select File"
-4. Wait for processing
-5. Play or download the generated WAV file
-
-### Decoding SSTV Audio
-1. Click "Decode (Audio → Image)"
-2. Drag & drop an SSTV audio file
-3. Wait for processing (mode auto-detected from VIS code)
-4. View and download the decoded image
-
-## Development
+## 💻 Development
 
 ```bash
+# Clone the repository
+git clone https://github.com/milesburton/sstv-toolkit.git
+cd sstv-toolkit
+
 # Install dependencies
 npm install
 
@@ -74,31 +81,18 @@ npm run build
 npm run preview
 ```
 
-## Testing
+## 🧪 Testing
 
 Comprehensive test suite with unit and integration tests for encoder/decoder validation.
 See [TESTING.md](TESTING.md) for details.
 
-**Note:** Tests require Node.js 20+ (Vitest requirement). Current deployment uses build without tests.
+**Note:** Tests require Node.js 20+ (Vitest requirement).
 
-## Deployment
+## 🚀 Deployment
 
-This app is configured for GitHub Pages deployment:
+This app is deployed to GitHub Pages using GitHub Actions. Every push to master automatically builds and deploys the latest version.
 
-```bash
-npm run build
-npm run deploy
-```
-
-## SSTV Modes
-
-| Mode | Resolution | Scan Time | Color |
-|------|-----------|-----------|-------|
-| Robot 36 | 320x240 | ~36s | YUV (grayscale in current implementation) |
-| Martin M1 | 320x256 | ~114s | RGB |
-| Scottie S1 | 320x256 | ~110s | RGB |
-
-## Browser Compatibility
+## 🌐 Browser Compatibility
 
 Requires a modern browser with support for:
 - Web Audio API
@@ -106,10 +100,24 @@ Requires a modern browser with support for:
 - ES6+ JavaScript
 - File API
 
-## License
+Tested on: Chrome, Firefox, Safari, Edge
 
-MIT
+## 📝 Use Cases
 
-## Credits
+- **Amateur Radio**: Transmit pictures over HF/VHF radio
+- **Emergency Communications**: Send images when internet is unavailable
+- **Education**: Learn about signal processing and radio transmission
+- **Hobby**: Experiment with analog image transmission
+- **ISS Contact**: Decode SSTV images from the International Space Station
+
+## 🤝 Contributing
+
+Contributions welcome! Please feel free to submit issues and pull requests.
+
+## 📄 License
+
+MIT License - see LICENSE file for details
+
+## 🙏 Credits
 
 Built with React and deployed on GitHub Pages.
