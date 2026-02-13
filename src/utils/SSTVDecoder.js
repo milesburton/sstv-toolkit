@@ -323,8 +323,9 @@ export class SSTVDecoder {
     const Y_SCAN_TIME = 0.088;
     const samplesPerPixel = Math.floor((Y_SCAN_TIME * this.sampleRate) / this.mode.width);
 
-    // Use multi-pixel window for better frequency resolution
-    const pixelGroupSize = 4;
+    // Use larger pixel group for better frequency resolution
+    // At 48kHz, 13.2 samples/pixel * 8 pixels = ~106 samples ≈ 2.2ms window
+    const pixelGroupSize = 8;
     const groupSamples = samplesPerPixel * pixelGroupSize;
 
     for (let x = 0; x < this.mode.width; x++) {
@@ -367,28 +368,20 @@ export class SSTVDecoder {
     const halfWidth = Math.floor(this.mode.width / 2);
     const samplesPerPixel = Math.floor((CHROMA_SCAN_TIME * this.sampleRate) / halfWidth);
 
-    const pixelGroupSize = 4;
-    const groupSamples = samplesPerPixel * pixelGroupSize;
+    // Use fixed 3ms window (144 samples at 48kHz) for better frequency resolution
+    // This gives ~5-6 cycles at 1900Hz for reliable Goertzel detection
+    const windowDuration = 0.003; // 3ms window
+    const windowSamples = Math.floor(windowDuration * this.sampleRate);
 
     for (let x = 0; x < halfWidth; x++) {
       const pos = startPos + x * samplesPerPixel;
 
-      if (pos >= samples.length) break;
+      if (pos + windowSamples >= samples.length) break;
 
-      let freq;
-      if (pos + groupSamples <= samples.length) {
-        freq = this.detectFrequencyRange(
-          samples,
-          pos,
-          (CHROMA_SCAN_TIME / halfWidth) * pixelGroupSize
-        );
-      } else {
-        const availableTime = (samples.length - pos) / this.sampleRate;
-        freq = this.detectFrequencyRange(samples, pos, availableTime);
-      }
+      // Use fixed window for frequency detection
+      const freq = this.detectFrequencyRange(samples, pos, windowDuration);
 
       // Map frequency to component value (video range: 16-240)
-      // Must match the encoder's mapping: (chroma - 16) / (240 - 16) = normalized
       const normalized = (freq - FREQ_BLACK) / (FREQ_WHITE - FREQ_BLACK);
       let value = 16 + normalized * (240 - 16);
       value = Math.max(16, Math.min(240, Math.round(value)));
