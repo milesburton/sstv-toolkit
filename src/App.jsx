@@ -2,237 +2,336 @@ import { useState } from 'react';
 import './App.css';
 import { SSTVEncoder, SSTV_MODES } from './utils/SSTVEncoder';
 import { SSTVDecoder } from './utils/SSTVDecoder';
-import ExampleSelector from './components/ExampleSelector';
 
 function App() {
-  const [mode, setMode] = useState('encode');
+  // Encoder state
   const [selectedMode, setSelectedMode] = useState('ROBOT36');
-  const [processing, setProcessing] = useState(false);
-  const [result, setResult] = useState(null);
-  const [error, setError] = useState(null);
-  const [dragActive, setDragActive] = useState(false);
+  const [encodeProcessing, setEncodeProcessing] = useState(false);
+  const [encodeResult, setEncodeResult] = useState(null);
+  const [encodeError, setEncodeError] = useState(null);
+  const [encodeDragActive, setEncodeDragActive] = useState(false);
+  const [encodeImagePreview, setEncodeImagePreview] = useState(null);
 
-  const handleDrag = (e) => {
+  // Decoder state
+  const [decodeProcessing, setDecodeProcessing] = useState(false);
+  const [decodeResult, setDecodeResult] = useState(null);
+  const [decodeError, setDecodeError] = useState(null);
+  const [decodeDragActive, setDecodeDragActive] = useState(false);
+
+  // Encoder handlers
+  const handleEncodeDrag = (e) => {
     e.preventDefault();
     e.stopPropagation();
     if (e.type === 'dragenter' || e.type === 'dragover') {
-      setDragActive(true);
+      setEncodeDragActive(true);
     } else if (e.type === 'dragleave') {
-      setDragActive(false);
+      setEncodeDragActive(false);
     }
   };
 
-  const handleDrop = async (e) => {
+  const handleEncodeDrop = async (e) => {
     e.preventDefault();
     e.stopPropagation();
-    setDragActive(false);
-
+    setEncodeDragActive(false);
     const files = e.dataTransfer.files;
-    if (files?.[0]) {
-      await processFile(files[0]);
-    }
+    if (files?.[0]) await handleEncodeFile(files[0]);
   };
 
-  const handleFileSelect = async (e) => {
+  const handleEncodeFileSelect = async (e) => {
     const files = e.target.files;
-    if (files?.[0]) {
-      await processFile(files[0]);
-    }
+    if (files?.[0]) await handleEncodeFile(files[0]);
   };
 
-  const processFile = async (file) => {
-    setProcessing(true);
-    setError(null);
-    setResult(null);
+  const handleEncodeFile = async (file) => {
+    setEncodeProcessing(true);
+    setEncodeError(null);
+    setEncodeResult(null);
+
+    // Set preview
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = (e) => setEncodeImagePreview(e.target.result);
+      reader.readAsDataURL(file);
+    }
 
     try {
-      if (mode === 'encode') {
-        // Check if it's an image
-        if (!file.type.startsWith('image/')) {
-          throw new Error('Please select an image file (JPG, PNG, etc.)');
-        }
-
-        const encoder = new SSTVEncoder(selectedMode);
-        const audioBlob = await encoder.encodeImage(file);
-
-        setResult({
-          type: 'audio',
-          blob: audioBlob,
-          url: URL.createObjectURL(audioBlob),
-          filename: `sstv_${selectedMode.toLowerCase()}_${Date.now()}.wav`
-        });
-      } else {
-        // Decode mode
-        if (!file.type.startsWith('audio/')) {
-          throw new Error('Please select an audio file (WAV, MP3, etc.)');
-        }
-
-        const decoder = new SSTVDecoder();
-        const imageDataUrl = await decoder.decodeAudio(file);
-
-        setResult({
-          type: 'image',
-          url: imageDataUrl,
-          filename: `sstv_decoded_${Date.now()}.png`
-        });
+      if (!file.type.startsWith('image/')) {
+        throw new Error('Please select an image file (JPG, PNG, etc.)');
       }
+
+      const encoder = new SSTVEncoder(selectedMode);
+      const audioBlob = await encoder.encodeImage(file);
+
+      setEncodeResult({
+        blob: audioBlob,
+        url: URL.createObjectURL(audioBlob),
+        filename: `sstv_${selectedMode.toLowerCase()}_${Date.now()}.wav`
+      });
     } catch (err) {
-      setError(err.message);
+      setEncodeError(err.message);
       console.error(err);
     } finally {
-      setProcessing(false);
+      setEncodeProcessing(false);
     }
   };
 
-  const downloadResult = () => {
-    if (!result) return;
-
+  const downloadEncode = () => {
+    if (!encodeResult) return;
     const link = document.createElement('a');
-    link.href = result.url;
-    link.download = result.filename;
+    link.href = encodeResult.url;
+    link.download = encodeResult.filename;
     link.click();
   };
 
-  const reset = () => {
-    setResult(null);
-    setError(null);
+  const resetEncode = () => {
+    setEncodeResult(null);
+    setEncodeError(null);
+    setEncodeImagePreview(null);
+  };
+
+  // Decoder handlers
+  const handleDecodeDrag = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === 'dragenter' || e.type === 'dragover') {
+      setDecodeDragActive(true);
+    } else if (e.type === 'dragleave') {
+      setDecodeDragActive(false);
+    }
+  };
+
+  const handleDecodeDrop = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDecodeDragActive(false);
+    const files = e.dataTransfer.files;
+    if (files?.[0]) await handleDecodeFile(files[0]);
+  };
+
+  const handleDecodeFileSelect = async (e) => {
+    const files = e.target.files;
+    if (files?.[0]) await handleDecodeFile(files[0]);
+  };
+
+  const handleDecodeFile = async (file) => {
+    setDecodeProcessing(true);
+    setDecodeError(null);
+    setDecodeResult(null);
+
+    try {
+      if (!file.type.startsWith('audio/')) {
+        throw new Error('Please select an audio file (WAV, MP3, etc.)');
+      }
+
+      const decoder = new SSTVDecoder();
+      const imageDataUrl = await decoder.decodeAudio(file);
+
+      setDecodeResult({
+        url: imageDataUrl,
+        filename: `sstv_decoded_${Date.now()}.png`
+      });
+    } catch (err) {
+      setDecodeError(err.message);
+      console.error(err);
+    } finally {
+      setDecodeProcessing(false);
+    }
+  };
+
+  const downloadDecode = () => {
+    if (!decodeResult) return;
+    const link = document.createElement('a');
+    link.href = decodeResult.url;
+    link.download = decodeResult.filename;
+    link.click();
+  };
+
+  const resetDecode = () => {
+    setDecodeResult(null);
+    setDecodeError(null);
   };
 
   return (
     <div className="app">
       <header>
-        <h1>SSTV Encoder/Decoder</h1>
-        <p>Convert images to SSTV audio signals and decode SSTV transmissions</p>
+        <h1>📡 SSTV Toolkit</h1>
+        <p>Encode images to SSTV audio and decode SSTV transmissions</p>
       </header>
 
-      <div className="mode-selector">
-        <button
-          type="button"
-          className={mode === 'encode' ? 'active' : ''}
-          onClick={() => { setMode('encode'); reset(); }}
-        >
-          Encode (Image → Audio)
-        </button>
-        <button
-          type="button"
-          className={mode === 'decode' ? 'active' : ''}
-          onClick={() => { setMode('decode'); reset(); }}
-        >
-          Decode (Audio → Image)
-        </button>
-      </div>
+      <main className="side-by-side">
+        {/* Encoder Section */}
+        <div className="panel">
+          <div className="panel-header">
+            <h2>🖼️ Encoder</h2>
+            <p>Image → SSTV Audio</p>
+          </div>
 
-      {mode === 'encode' && (
-        <div className="mode-options">
-          <label>
-            SSTV Mode:
-            <select value={selectedMode} onChange={(e) => setSelectedMode(e.target.value)}>
-              {Object.entries(SSTV_MODES).map(([key, mode]) => (
-                <option key={key} value={key}>
-                  {mode.name} ({mode.width}x{mode.lines})
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-      )}
+          <div className="mode-options">
+            <label>
+              SSTV Mode:
+              <select value={selectedMode} onChange={(e) => setSelectedMode(e.target.value)}>
+                {Object.entries(SSTV_MODES).map(([key, mode]) => (
+                  <option key={key} value={key}>
+                    {mode.name} ({mode.width}×{mode.lines})
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
 
-      <section
-        aria-label="File drop zone"
-        className={`drop-zone ${dragActive ? 'active' : ''} ${processing ? 'processing' : ''}`}
-        onDragEnter={handleDrag}
-        onDragLeave={handleDrag}
-        onDragOver={handleDrag}
-        onDrop={handleDrop}
-      >
-        <input
-          type="file"
-          id="file-input"
-          accept={mode === 'encode' ? 'image/*' : 'audio/*'}
-          onChange={handleFileSelect}
-          disabled={processing}
-        />
-        <label htmlFor="file-input">
-          {processing ? (
-            <>
-              <div className="spinner"></div>
-              <p>Processing...</p>
-            </>
-          ) : (
-            <>
-              <div className="icon">
-                {mode === 'encode' ? '🖼️' : '🎵'}
-              </div>
-              <p>
-                Drag & drop {mode === 'encode' ? 'an image' : 'an audio file'} here
-              </p>
-              <p className="or">or</p>
-              <button
-                type="button"
-                className="select-btn"
-                onClick={(e) => {
-                  e.preventDefault();
-                  document.getElementById('file-input').click();
-                }}
-              >
-                Select File
-              </button>
-              <p className="hint">
-                {mode === 'encode'
-                  ? 'Supported: JPG, PNG, GIF, WebP'
-                  : 'Supported: WAV, MP3, OGG'}
-              </p>
-            </>
+          <section
+            className={`drop-zone ${encodeDragActive ? 'active' : ''} ${encodeProcessing ? 'processing' : ''}`}
+            onDragEnter={handleEncodeDrag}
+            onDragLeave={handleEncodeDrag}
+            onDragOver={handleEncodeDrag}
+            onDrop={handleEncodeDrop}
+          >
+            <input
+              type="file"
+              id="encode-input"
+              accept="image/*"
+              onChange={handleEncodeFileSelect}
+              disabled={encodeProcessing}
+            />
+            <label htmlFor="encode-input">
+              {encodeProcessing ? (
+                <>
+                  <div className="spinner"></div>
+                  <p>Encoding...</p>
+                </>
+              ) : (
+                <>
+                  <div className="icon">🖼️</div>
+                  <p>Drag & drop an image</p>
+                  <p className="or">or</p>
+                  <button
+                    type="button"
+                    className="select-btn"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      document.getElementById('encode-input').click();
+                    }}
+                  >
+                    Choose Image
+                  </button>
+                  <p className="hint">JPG, PNG, GIF, WebP</p>
+                </>
+              )}
+            </label>
+          </section>
+
+          {encodeImagePreview && !encodeResult && (
+            <div className="preview">
+              <img src={encodeImagePreview} alt="Preview" />
+            </div>
           )}
-        </label>
-      </section>
 
-      {!processing && !result && (
-        <ExampleSelector mode={mode} onSelectExample={processFile} />
-      )}
+          {encodeError && (
+            <div className="error">❌ {encodeError}</div>
+          )}
 
-      {error && (
-        <div className="error">
-          <strong>Error:</strong> {error}
-        </div>
-      )}
-
-      {result && (
-        <div className="result">
-          <h2>Result</h2>
-
-          {result.type === 'audio' ? (
-            <div className="audio-result">
-              <audio controls src={result.url} aria-label="SSTV audio output">
+          {encodeResult && (
+            <div className="result">
+              <h3>✅ Encoded Successfully</h3>
+              <audio controls src={encodeResult.url}>
                 Your browser does not support the audio element.
               </audio>
-              <p>Duration: ~{Math.round((result.blob.size / 88200) * 10) / 10}s</p>
-            </div>
-          ) : (
-            <div className="image-result">
-              <img src={result.url} alt="Decoded SSTV" />
+              <div className="actions">
+                <button onClick={downloadEncode} className="download-btn">
+                  💾 Download WAV
+                </button>
+                <button onClick={resetEncode} className="reset-btn">
+                  🔄 Encode Another
+                </button>
+              </div>
             </div>
           )}
-
-          <div className="actions">
-            <button type="button" onClick={downloadResult} className="download-btn">
-              Download {result.type === 'audio' ? 'WAV' : 'PNG'}
-            </button>
-            <button type="button" onClick={reset} className="reset-btn">
-              Process Another File
-            </button>
-          </div>
         </div>
-      )}
+
+        {/* Decoder Section */}
+        <div className="panel">
+          <div className="panel-header">
+            <h2>📻 Decoder</h2>
+            <p>SSTV Audio → Image</p>
+          </div>
+
+          <section
+            className={`drop-zone ${decodeDragActive ? 'active' : ''} ${decodeProcessing ? 'processing' : ''}`}
+            onDragEnter={handleDecodeDrag}
+            onDragLeave={handleDecodeDrag}
+            onDragOver={handleDecodeDrag}
+            onDrop={handleDecodeDrop}
+          >
+            <input
+              type="file"
+              id="decode-input"
+              accept="audio/*"
+              onChange={handleDecodeFileSelect}
+              disabled={decodeProcessing}
+            />
+            <label htmlFor="decode-input">
+              {decodeProcessing ? (
+                <>
+                  <div className="spinner"></div>
+                  <p>Decoding...</p>
+                </>
+              ) : (
+                <>
+                  <div className="icon">🎵</div>
+                  <p>Drag & drop SSTV audio</p>
+                  <p className="or">or</p>
+                  <button
+                    type="button"
+                    className="select-btn"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      document.getElementById('decode-input').click();
+                    }}
+                  >
+                    Choose Audio File
+                  </button>
+                  <p className="hint">WAV, MP3, OGG</p>
+                </>
+              )}
+            </label>
+          </section>
+
+          {decodeError && (
+            <div className="error">❌ {decodeError}</div>
+          )}
+
+          {decodeResult && (
+            <div className="result">
+              <h3>✅ Decoded Successfully</h3>
+              <img src={decodeResult.url} alt="Decoded SSTV" />
+              <div className="actions">
+                <button onClick={downloadDecode} className="download-btn">
+                  💾 Download PNG
+                </button>
+                <button onClick={resetDecode} className="reset-btn">
+                  🔄 Decode Another
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </main>
+
+      <div className="info-section">
+        <h3>ℹ️ About SSTV</h3>
+        <ul>
+          <li><strong>Encode:</strong> Convert images to audio signals for radio transmission</li>
+          <li><strong>Decode:</strong> Extract images from SSTV audio (automatic mode detection via VIS code)</li>
+          <li><strong>Modes:</strong> Robot 36 (fast, 36s), Martin M1 (high quality, 114s), Scottie S1 (balanced, 110s)</li>
+          <li><strong>Privacy:</strong> All processing happens in your browser - no data sent to servers</li>
+          <li><strong>Use Cases:</strong> Amateur radio, emergency communications, ISS contact, digital archaeology</li>
+        </ul>
+      </div>
 
       <footer>
         <p>
-          <strong>Supported SSTV Modes:</strong> Robot 36, Martin M1, Scottie S1
-        </p>
-        <p>
-          Built with React • Open source on{' '}
-          <a href="https://github.com/milesburton/sstv-webapp" target="_blank" rel="noopener noreferrer">
-            GitHub
+          <a href="https://github.com/milesburton/sstv-toolkit" target="_blank" rel="noopener noreferrer">
+            View on GitHub
           </a>
         </p>
       </footer>

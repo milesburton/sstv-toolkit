@@ -85,6 +85,15 @@ export class SSTVDecoder {
     const ctx = canvas.getContext('2d');
     const imageData = ctx.createImageData(canvas.width, canvas.height);
 
+    // Initialize all pixels to black with full opacity
+    // This ensures pixels that don't get decoded are opaque rather than transparent
+    for (let i = 0; i < imageData.data.length; i += 4) {
+      imageData.data[i] = 0;     // R
+      imageData.data[i + 1] = 0; // G
+      imageData.data[i + 2] = 0; // B
+      imageData.data[i + 3] = 255; // A - critical for visibility
+    }
+
     // Find first sync pulse to align - skip VIS code area
     const visCodeDuration = 0.5; // VIS code is about 500ms
     const searchStart = Math.floor(visCodeDuration * this.sampleRate);
