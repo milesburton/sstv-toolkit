@@ -7,7 +7,7 @@ global.Image = Image;
 
 // Override document.createElement to return node-canvas for canvas elements
 const originalCreateElement = document.createElement.bind(document);
-document.createElement = function (tagName, options) {
+document.createElement = (tagName, options) => {
   if (tagName.toLowerCase() === 'canvas') {
     return new Canvas(300, 150); // Default canvas size
   }
@@ -15,7 +15,7 @@ document.createElement = function (tagName, options) {
 };
 
 // Add toBlob method to Canvas prototype (node-canvas doesn't have it)
-Canvas.prototype.toBlob = function (callback, type = 'image/png', quality = 0.92) {
+Canvas.prototype.toBlob = function (callback, type = 'image/png', _quality = 0.92) {
   const buffer = this.toBuffer(type.split('/')[1] || 'png');
   const blob = new Blob([buffer], { type });
   callback(blob);
@@ -25,7 +25,7 @@ Canvas.prototype.toBlob = function (callback, type = 'image/png', quality = 0.92
 const blobRegistry = new WeakMap();
 let blobIdCounter = 0;
 
-global.URL.createObjectURL = function (blob) {
+global.URL.createObjectURL = (blob) => {
   const blobId = `blob:test-${blobIdCounter++}`;
   blobRegistry.set(blob, blobId);
   // Store the blob data so Image can access it
@@ -34,7 +34,7 @@ global.URL.createObjectURL = function (blob) {
   return blobId;
 };
 
-global.URL.revokeObjectURL = function () {
+global.URL.revokeObjectURL = () => {
   // No-op for tests
 };
 

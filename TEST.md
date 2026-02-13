@@ -2,46 +2,71 @@
 
 ## Test Summary
 
-### Automated Tests (npm test)
-- **Total**: 27 tests
-- **Passing**: 24 tests ✅
-- **Skipped**: 3 tests ⏭️ (browser-only features)
+### Automated Tests
+- **Unit Tests (Vitest)**: 24 tests ✅ All passing
+- **E2E Tests (Playwright)**: 5 tests ✅ All passing
+- **Total Coverage**: 29 automated tests
 
-### Test Details
+### Test Architecture
 
-#### ✅ Passing Tests (24)
-All core functionality tests pass:
+This project uses a **dual testing strategy**:
 
-**SSTVDecoder Tests** (11/11 passing):
-- VIS code detection
+1. **Unit Tests (Vitest + happy-dom)** - Fast, isolated component testing
+2. **E2E Tests (Playwright)** - Real browser integration testing
+
+#### ✅ Unit Tests (24 tests via `npm run spec:run`)
+
+**SSTVDecoder Tests** (11 tests):
+- VIS code detection and parsing
 - Frequency detection (Goertzel algorithm)
 - Sync pulse detection
-- All decoder functionality working correctly
+- Mode auto-detection
 
-**SSTVEncoder Tests** (8/9 passing):
+**SSTVEncoder Tests** (8 tests):
 - Mode initialization (Robot 36, Martin M1, Scottie S1)
 - WAV header generation
-- Tone generation (sync, data tones)
+- Tone generation (sync pulses, data tones)
 - VIS code encoding
 - Frequency mapping (black→1500Hz, white→2300Hz)
 
-**Integration Tests** (5/7 passing, 2 skipped):
-- Frequency accuracy tests
-- Mode compatibility tests
+**Integration Tests** (5 tests):
+- Frequency accuracy validation
+- Mode compatibility checks
 - Sync pulse generation
 
-#### ⏭️ Skipped Tests (3)
-These 3 tests require full browser environment:
+#### ✅ E2E Tests (5 tests via `npm run test:e2e`)
 
-1. `SSTVEncoder.spec.js` - "should encode a simple test image"
-2. `SSTVIntegration.spec.js` - "should encode and decode a simple pattern accurately"
-3. `SSTVIntegration.spec.js` - "should preserve high contrast patterns"
+**Full Workflow Tests** (using Playwright with real Chromium browser):
+1. **Complete encode→decode round trip** - Verifies image→audio→image workflow
+2. **Robot 36 mode** - Tests encoding with default mode
+3. **Martin M1 mode** - Tests encoding with Martin mode
+4. **Scottie S1 mode** - Tests encoding with Scottie mode
+5. **Drag and drop upload** - Tests file upload UI interaction
 
-**Why Skipped**:
-- These tests require File/Blob/Image APIs that don't translate well to Node.js test environments
-- Full encode→decode integration testing requires real browser APIs (canvas, Image loading, blob URLs)
-- These tests are best verified through manual browser testing or end-to-end testing with Playwright/Puppeteer
-- Core encoding/decoding logic is thoroughly tested by the 24 passing unit tests
+**Why Playwright?**
+- Tests run in real browser with actual Canvas, Image, Blob, and File APIs
+- More accurate representation of user experience
+- Can verify visual output and UI interactions
+- Industry standard for web application E2E testing
+
+## Running Tests
+
+### Run All Tests
+```bash
+npm run test:all        # Runs both unit and E2E tests
+```
+
+### Run Unit Tests Only
+```bash
+npm run spec:run        # Fast unit tests (~2s)
+npm run spec            # Watch mode for development
+```
+
+### Run E2E Tests Only
+```bash
+npm run test:e2e        # Real browser tests (~20s)
+npm run test:e2e:ui     # Interactive UI mode
+```
 
 ## Manual Testing
 
@@ -121,17 +146,20 @@ Use this checklist to verify the encode→decode workflow:
 
 The SSTV Toolkit is working correctly if:
 
-1. ✅ All automated tests pass (except canvas rendering tests)
-2. ✅ Can encode image → SSTV audio
-3. ✅ Can decode SSTV audio → image
-4. ✅ Decoded images are visible (not black)
-5. ✅ Round-trip works: encode→decode→recognizable image
-6. ✅ All 3 SSTV modes function correctly
-7. ✅ UI is responsive and user-friendly
+1. ✅ All 24 unit tests pass (Vitest)
+2. ✅ All 5 E2E tests pass (Playwright)
+3. ✅ Can encode image → SSTV audio
+4. ✅ Can decode SSTV audio → image
+5. ✅ Decoded images are visible (not black)
+6. ✅ Round-trip works: encode→decode→recognizable image
+7. ✅ All 3 SSTV modes function correctly (Robot36, Martin1, Scottie1)
+8. ✅ UI is responsive and user-friendly
 
 ---
 
 **Last Updated**: February 13, 2026
-**Test Environment**: Vitest 4.0.18 + happy-dom 20.4.0
-**Build Status**: ✅ Passing
+**Test Frameworks**:
+- Vitest 4.0.18 (unit tests)
+- Playwright 1.58.2 (E2E tests)
+**Build Status**: ✅ All 29 tests passing
 **Deployment**: https://milesburton.github.io/sstv-toolkit/

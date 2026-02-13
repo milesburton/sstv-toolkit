@@ -1,82 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { SSTVDecoder } from './SSTVDecoder';
 import { SSTVEncoder } from './SSTVEncoder';
 
+/**
+ * Unit tests for SSTV integration logic
+ * Note: Full encode→decode integration tests are in e2e/sstv-integration.spec.js (Playwright)
+ */
 describe('SSTV Integration Tests', () => {
-  describe('Encode → Decode Round Trip', () => {
-    // Skipped: Requires browser environment for File/Blob/Image APIs
-    it.skip('should encode and decode a simple pattern accurately', async () => {
-      // Create a simple test image with known values
-      const canvas = document.createElement('canvas');
-      canvas.width = 10;
-      canvas.height = 10;
-      const ctx = canvas.getContext('2d');
-
-      // Create a simple gradient
-      ctx.fillStyle = 'black';
-      ctx.fillRect(0, 0, 5, 10);
-      ctx.fillStyle = 'white';
-      ctx.fillRect(5, 0, 5, 10);
-
-      // Convert to blob
-      const imageBlob = await new Promise((resolve) => {
-        canvas.toBlob(resolve);
-      });
-
-      const imageFile = new File([imageBlob], 'test.png', { type: 'image/png' });
-
-      // Encode
-      const encoder = new SSTVEncoder('ROBOT36');
-      const audioBlob = await encoder.encodeImage(imageFile);
-
-      expect(audioBlob).toBeInstanceOf(Blob);
-      expect(audioBlob.size).toBeGreaterThan(1000);
-
-      // Decode
-      const decoder = new SSTVDecoder();
-      const audioFile = new File([audioBlob], 'test.wav', { type: 'audio/wav' });
-
-      // This will use our mocked AudioContext
-      const decodedDataUrl = await decoder.decodeAudio(audioFile);
-
-      expect(decodedDataUrl).toBeTruthy();
-      expect(decodedDataUrl).toContain('data:image/png');
-    }, 30000); // 30 second timeout for this complex test
-
-    // Skipped: Requires browser environment for File/Blob/Image APIs
-    it.skip('should preserve high contrast patterns', async () => {
-      // Create a checkerboard pattern
-      const canvas = document.createElement('canvas');
-      canvas.width = 4;
-      canvas.height = 4;
-      const ctx = canvas.getContext('2d');
-
-      // Checkerboard
-      for (let y = 0; y < 4; y++) {
-        for (let x = 0; x < 4; x++) {
-          ctx.fillStyle = (x + y) % 2 === 0 ? 'white' : 'black';
-          ctx.fillRect(x, y, 1, 1);
-        }
-      }
-
-      const imageBlob = await new Promise((resolve) => {
-        canvas.toBlob(resolve);
-      });
-
-      const imageFile = new File([imageBlob], 'checkerboard.png', { type: 'image/png' });
-
-      // Encode
-      const encoder = new SSTVEncoder('ROBOT36');
-      const audioBlob = await encoder.encodeImage(imageFile);
-
-      expect(audioBlob).toBeInstanceOf(Blob);
-
-      // The audio should contain both low (black) and high (white) frequencies
-      const arrayBuffer = await audioBlob.arrayBuffer();
-      expect(arrayBuffer.byteLength).toBeGreaterThan(0);
-    }, 30000);
-  });
-
   describe('Frequency Accuracy', () => {
     it('should generate accurate sync pulses at 1200 Hz', () => {
       const encoder = new SSTVEncoder('ROBOT36');

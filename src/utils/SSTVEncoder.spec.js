@@ -66,35 +66,6 @@ describe('SSTVEncoder', () => {
     });
   });
 
-  describe('Image Encoding', () => {
-    // Skipped: Requires browser environment for File/Blob/Image APIs
-    it.skip('should encode a simple test image', async () => {
-      // Create a simple 2x2 test image
-      const canvas = document.createElement('canvas');
-      canvas.width = 2;
-      canvas.height = 2;
-      const ctx = canvas.getContext('2d');
-
-      // Draw a simple pattern
-      ctx.fillStyle = 'white';
-      ctx.fillRect(0, 0, 1, 1);
-      ctx.fillStyle = 'black';
-      ctx.fillRect(1, 1, 1, 1);
-
-      // Convert to blob
-      const blob = await new Promise((resolve) => {
-        canvas.toBlob(resolve);
-      });
-
-      const file = new File([blob], 'test.png', { type: 'image/png' });
-      const audioBlob = await encoder.encodeImage(file);
-
-      expect(audioBlob).toBeInstanceOf(Blob);
-      expect(audioBlob.type).toBe('audio/wav');
-      expect(audioBlob.size).toBeGreaterThan(1000); // Should be substantial
-    });
-  });
-
   describe('Frequency Mapping', () => {
     it('should map black (0) to 1500 Hz', () => {
       const samples = [];
