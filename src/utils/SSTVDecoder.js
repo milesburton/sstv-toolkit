@@ -159,13 +159,26 @@ export class SSTVDecoder {
   decodeScanLine(samples, startPos, imageData, y, channel) {
     const samplesPerPixel = Math.floor((this.mode.scanTime * this.sampleRate) / this.mode.width);
 
+    // Use multi-pixel window for better frequency resolution
+    // Single pixel has insufficient resolution for Goertzel
+    // Use 4-pixel window for improved frequency discrimination
+    const pixelGroupSize = 4;
+
     for (let x = 0; x < this.mode.width; x++) {
       const pos = startPos + x * samplesPerPixel;
 
       if (pos >= samples.length) break;
 
-      // Use a wider frequency sweep for more accuracy
-      const freq = this.detectFrequencyRange(samples, pos, this.mode.scanTime / this.mode.width);
+      // Use wider analysis window for better frequency discrimination
+      let freq;
+      if (pos + (pixelGroupSize * samplesPerPixel) <= samples.length) {
+        // Enough samples for multi-pixel analysis
+        freq = this.detectFrequencyRange(samples, pos, this.mode.scanTime / this.mode.width * pixelGroupSize);
+      } else {
+        // Fall back to shorter window at end of data
+        const availableTime = (samples.length - pos) / this.sampleRate;
+        freq = this.detectFrequencyRange(samples, pos, availableTime);
+      }
 
       // Map frequency to pixel value with clamping
       let value = ((freq - FREQ_BLACK) / (FREQ_WHITE - FREQ_BLACK)) * 255;
@@ -190,9 +203,8 @@ export class SSTVDecoder {
     let maxMag = 0;
     let detectedFreq = FREQ_BLACK;
 
-    // Coarse sweep first (every 100 Hz)
-    // Start below FREQ_SYNC (1200) to correctly identify sync vs data
-    for (let freq = FREQ_SYNC - 100; freq <= FREQ_WHITE + 200; freq += 100) {
+    // Coarse sweep (every 25 Hz for better initial detection)
+    for (let freq = FREQ_SYNC - 100; freq <= FREQ_WHITE + 200; freq += 25) {
       const magnitude = this.goertzel(samples, startIdx, endIdx, freq);
       if (magnitude > maxMag) {
         maxMag = magnitude;
@@ -200,11 +212,12 @@ export class SSTVDecoder {
       }
     }
 
-    // Fine sweep around the detected frequency (every 20 Hz)
-    const fineStart = Math.max(FREQ_SYNC - 100, detectedFreq - 100);
-    const fineEnd = Math.min(FREQ_WHITE + 200, detectedFreq + 100);
+    // Fine sweep around the detected frequency (every 1 Hz for accuracy)
+    // Narrower search range since coarse is more accurate now
+    const fineStart = Math.max(FREQ_SYNC - 100, detectedFreq - 30);
+    const fineEnd = Math.min(FREQ_WHITE + 200, detectedFreq + 30);
 
-    for (let freq = fineStart; freq <= fineEnd; freq += 20) {
+    for (let freq = fineStart; freq <= fineEnd; freq += 1) {
       const magnitude = this.goertzel(samples, startIdx, endIdx, freq);
       if (magnitude > maxMag) {
         maxMag = magnitude;
@@ -217,13 +230,28 @@ export class SSTVDecoder {
 
   decodeScanLineY(samples, startPos, imageData, y) {
     const samplesPerPixel = Math.floor((this.mode.scanTime * this.sampleRate) / this.mode.width);
+    
+    // Use multi-pixel window for better frequency resolution
+    // Single pixel (22 samples) has insufficient resolution for Goertzel
+    // Use 4-pixel window (88 samples) for 1.8ms analysis window
+    const pixelGroupSize = 4;
+    const groupSamples = samplesPerPixel * pixelGroupSize;
 
     for (let x = 0; x < this.mode.width; x++) {
       const pos = startPos + x * samplesPerPixel;
 
       if (pos >= samples.length) break;
 
-      const freq = this.detectFrequencyRange(samples, pos, this.mode.scanTime / this.mode.width);
+      // Use wider analysis window for better frequency discrimination
+      let freq;
+      if (pos + groupSamples <= samples.length) {
+        // Enough samples for multi-pixel analysis
+        freq = this.detectFrequencyRange(samples, pos, (this.mode.scanTime / this.mode.width) * pixelGroupSize);
+      } else {
+        // Fall back to shorter window at end of data
+        const availableTime = (samples.length - pos) / this.sampleRate;
+        freq = this.detectFrequencyRange(samples, pos, availableTime);
+      }
 
       // Map frequency to luminance
       let Y = ((freq - FREQ_BLACK) / (FREQ_WHITE - FREQ_BLACK)) * 255;
