@@ -402,9 +402,9 @@ export class SSTVDecoder {
       const idx1 = y * this.mode.width + x * 2;
       const idx2 = y * this.mode.width + x * 2 + 1;
 
-      // Debug: log first few chroma values of first line
-      if (y === 0 && x < 5) {
-        console.log(`Line ${y}, x=${x}: freq=${Math.round(freq)}Hz → ${componentType}=${chromaValue}`);
+      // Debug: log first few chroma values of first TWO lines
+      if (y <= 1 && x < 5) {
+        console.log(`STORE: Line ${y}, x=${x}: freq=${Math.round(freq)}Hz → ${componentType}=${chromaValue} at idx ${idx1},${idx2}`);
       }
 
       if (componentType === 'U') {
@@ -416,6 +416,15 @@ export class SSTVDecoder {
         chromaV[idx1] = chromaValue;
         if (idx2 < this.mode.width * this.mode.lines) {
           chromaV[idx2] = chromaValue;
+        }
+      }
+
+      // Debug: verify what was stored
+      if (y <= 1 && x < 5) {
+        if (componentType === 'U') {
+          console.log(`  Stored chromaU[${idx1}]=${chromaU[idx1]}, chromaU[${idx2}]=${chromaU[idx2]}`);
+        } else {
+          console.log(`  Stored chromaV[${idx1}]=${chromaV[idx1]}, chromaV[${idx2}]=${chromaV[idx2]}`);
         }
       }
     }
@@ -440,9 +449,11 @@ export class SSTVDecoder {
         const V = chromaV[evenChromaIdx] || 128; // V from even line (default to neutral 128, not 0!)
         const U = chromaU[oddChromaIdx] || 128; // U from odd line (default to neutral 128, not 0!)
 
-        // Debug: log first few pixels of first line pair
+        // Debug: log first few pixels of first line pair with detailed indices
         if (y === 0 && x < 5) {
-          console.log(`RGB convert: x=${x}, U=${U}, V=${V}`);
+          console.log(`RETRIEVE: LineP ${y}, x=${x}: evenIdx=${evenChromaIdx}, oddIdx=${oddChromaIdx}`);
+          console.log(`  chromaV[${evenChromaIdx}]=${chromaV[evenChromaIdx]}, chromaU[${oddChromaIdx}]=${chromaU[oddChromaIdx]}`);
+          console.log(`  Using: U=${U}, V=${V}`);
         }
 
         // Apply to both lines in the pair
