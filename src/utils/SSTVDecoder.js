@@ -401,6 +401,11 @@ export class SSTVDecoder {
       const idx1 = y * this.mode.width + x * 2;
       const idx2 = y * this.mode.width + x * 2 + 1;
 
+      // Debug: log first few chroma values of first line
+      if (y === 0 && x < 5) {
+        console.log(`Line ${y}, x=${x}: freq=${Math.round(freq)}Hz → ${componentType}=${chromaValue}`);
+      }
+
       if (componentType === 'U') {
         chromaU[idx1] = chromaValue;
         if (idx2 < this.mode.width * this.mode.lines) {
