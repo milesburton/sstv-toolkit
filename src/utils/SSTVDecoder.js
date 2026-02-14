@@ -189,6 +189,11 @@ export class SSTVDecoder {
           const isVLine = Math.abs(sepFreq - FREQ_BLACK) < Math.abs(sepFreq - FREQ_WHITE);
           this.currentChromaType = isVLine ? 'V' : 'U';
 
+          // Debug: log first 10 lines
+          if (y < 10) {
+            console.log(`Line ${y}: Sep=${Math.round(sepFreq)}Hz, Type=${this.currentChromaType}, Expected=${y % 2 === 0 ? 'V' : 'U'}`);
+          }
+
           position += Math.floor(sepDuration * this.sampleRate);
 
           // Step 3: Skip porch (1.5ms)
