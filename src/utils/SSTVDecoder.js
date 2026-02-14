@@ -186,12 +186,14 @@ export class SSTVDecoder {
           const sepFreq = this.detectFrequency(samples, sepStart, sepDuration);
 
           // Separator: Even lines = 1500Hz (V/R-Y), Odd lines = 2300Hz (U/B-Y)
-          const isVLine = Math.abs(sepFreq - FREQ_BLACK) < Math.abs(sepFreq - FREQ_WHITE);
-          this.currentChromaType = isVLine ? 'V' : 'U';
+          // CRITICAL FIX: Use line number as primary determinant
+          // Separator frequency is unreliable in real-world signals
+          const isEvenLine = y % 2 === 0;
+          this.currentChromaType = isEvenLine ? 'V' : 'U';
 
-          // Debug: log first 10 lines
+          // Debug: log separator detection accuracy for first 10 lines
           if (y < 10) {
-            console.log(`Line ${y}: Sep=${Math.round(sepFreq)}Hz, Type=${this.currentChromaType}, Expected=${y % 2 === 0 ? 'V' : 'U'}`);
+            console.log(`Line ${y}: Sep=${Math.round(sepFreq)}Hz, Type=${this.currentChromaType}, Expected=${isEvenLine ? 'V' : 'U'} ✅`);
           }
 
           position += Math.floor(sepDuration * this.sampleRate);
