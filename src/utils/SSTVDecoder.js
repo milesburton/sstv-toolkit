@@ -376,10 +376,10 @@ export class SSTVDecoder {
     const samplesPerPixel = Math.floor((CHROMA_SCAN_TIME * this.sampleRate) / halfWidth);
 
     // Chroma scan is 44ms for 160 pixels = 0.275ms per pixel
-    // Each pixel is only 13.2 samples at 48kHz - too short for Goertzel
-    // Use 3ms window (~5.7 cycles at 1900Hz) for reliable detection
-    // This means ~11 pixels per window, but we sample every pixel
-    const windowDuration = 0.003; // 3ms window
+    // Reference implementation (Python SSTV) uses WINDOW_FACTOR = 7.70
+    // window = pixel_time * 7.70 = 0.000275 * 7.70 = 0.002117s = 2.1ms
+    // This gives ~4 cycles at 1900Hz which is sufficient for FFT/Goertzel
+    const windowDuration = 0.00211; // 2.1ms window (matches reference)
     const windowSamples = Math.floor(windowDuration * this.sampleRate);
 
     for (let x = 0; x < halfWidth; x++) {
