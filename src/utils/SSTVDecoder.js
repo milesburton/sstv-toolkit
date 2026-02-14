@@ -375,20 +375,20 @@ export class SSTVDecoder {
     const halfWidth = Math.floor(this.mode.width / 2);
     const samplesPerPixel = Math.floor((CHROMA_SCAN_TIME * this.sampleRate) / halfWidth);
 
-    // Use 10ms overlapping window centered on each pixel position for better accuracy
-    // 10ms = 480 samples at 48kHz = ~19 cycles at 1900Hz
-    const windowDuration = 0.010;
-    const windowSamples = Math.floor(windowDuration * this.sampleRate);
-    const halfWindow = Math.floor(windowSamples / 2);
+    // Chroma scan is 44ms for 160 pixels = 0.275ms per pixel
+    // Use a small window per pixel for actual signal sampling
+    // At 48kHz: 0.275ms = ~13.2 samples per pixel
+    // We need enough samples for frequency detection - use ~5 pixels = 1.375ms
+    const pixelsPerWindow = 5;
+    const windowDuration = (CHROMA_SCAN_TIME / halfWidth) * pixelsPerWindow; // ~1.375ms
 
     for (let x = 0; x < halfWidth; x++) {
-      const centerPos = startPos + x * samplesPerPixel;
-      const windowStart = Math.max(startPos, centerPos - halfWindow);
+      const pixelStart = startPos + x * samplesPerPixel;
 
-      if (windowStart + windowSamples >= samples.length) break;
+      if (pixelStart + Math.floor(windowDuration * this.sampleRate) >= samples.length) break;
 
-      // Use centered window for frequency detection
-      const freq = this.detectFrequencyRange(samples, windowStart, windowDuration);
+      // Sample directly at pixel position (no centering, no overlapping)
+      const freq = this.detectFrequencyRange(samples, pixelStart, windowDuration);
 
       // Map frequency to component value (video range: 16-240)
       const normalized = (freq - FREQ_BLACK) / (FREQ_WHITE - FREQ_BLACK);
