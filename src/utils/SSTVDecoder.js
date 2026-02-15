@@ -369,10 +369,9 @@ export class SSTVDecoder {
     const samplesPerPixel = Math.floor((CHROMA_SCAN_TIME * this.sampleRate) / halfWidth);
 
     // Chroma scan is 44ms for 160 pixels = 0.275ms per pixel
-    // Reference implementation uses WINDOW_FACTOR = 0.98 for Robot modes
-    // window = pixel_time * 0.98 = 0.000275 * 0.98 = 0.0002695s ≈ 0.27ms
-    const pixelTime = CHROMA_SCAN_TIME / halfWidth;
-    const windowDuration = pixelTime * 0.98;
+    // Use 3ms window for good frequency resolution
+    // At 1900Hz center frequency: 3ms = 5.7 cycles (enough for Goertzel)
+    const windowDuration = 0.003; // 3ms window
     const windowSamples = Math.floor(windowDuration * this.sampleRate);
 
     for (let x = 0; x < halfWidth; x++) {
