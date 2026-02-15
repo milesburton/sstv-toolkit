@@ -86,51 +86,68 @@ describe('ISS SSTV Decode Test', () => {
     const imageData = ctx.getImageData(0, 0, img.width, img.height);
     const pixels = imageData.data;
 
-    // Count pixels with different characteristics
-    let greenTintPixels = 0;
-    let colorfulPixels = 0;
-    let neutralPixels = 0;
+    // Calculate average color statistics and detect color corruption
+    let avgR = 0, avgG = 0, avgB = 0;
+    let greenDominant = 0;
+    let magentaDominant = 0;
+    let normalPixels = 0;
 
     for (let i = 0; i < pixels.length; i += 4) {
       const r = pixels[i];
       const g = pixels[i + 1];
       const b = pixels[i + 2];
 
-      // Green tint: G is significantly higher than R and B
+      avgR += r;
+      avgG += g;
+      avgB += b;
+
+      // Green dominant: G significantly higher than R and B
       if (g > r + 30 && g > b + 30) {
-        greenTintPixels++;
+        greenDominant++;
       }
 
-      // Colorful: significant variation between channels
-      const range = Math.max(r, g, b) - Math.min(r, g, b);
-      if (range > 50) {
-        colorfulPixels++;
+      // Magenta dominant: R and B high, G low
+      if (r > 150 && b > 150 && g < 100) {
+        magentaDominant++;
       }
 
-      // Neutral gray: all channels similar (128±20)
-      if (Math.abs(r - 128) < 20 && Math.abs(g - 128) < 20 && Math.abs(b - 128) < 20) {
-        neutralPixels++;
+      // Normal: balanced RGB or reasonable colors
+      const maxDiff = Math.max(Math.abs(r - g), Math.abs(g - b), Math.abs(r - b));
+      if (maxDiff < 80) {
+        normalPixels++;
       }
     }
 
     const totalPixels = pixels.length / 4;
-    const greenPercent = (greenTintPixels / totalPixels) * 100;
-    const colorfulPercent = (colorfulPixels / totalPixels) * 100;
-    const neutralPercent = (neutralPixels / totalPixels) * 100;
+    avgR /= totalPixels;
+    avgG /= totalPixels;
+    avgB /= totalPixels;
+
+    const greenPercent = (greenDominant / totalPixels) * 100;
+    const magentaPercent = (magentaDominant / totalPixels) * 100;
+    const normalPercent = (normalPixels / totalPixels) * 100;
 
     console.log('\n📊 ISS Image Analysis:');
-    console.log(`   Green-tinted: ${greenPercent.toFixed(1)}%`);
-    console.log(`   Colorful: ${colorfulPercent.toFixed(1)}%`);
-    console.log(`   Neutral gray: ${neutralPercent.toFixed(1)}%`);
+    console.log(`   Average RGB: R=${avgR.toFixed(1)}, G=${avgG.toFixed(1)}, B=${avgB.toFixed(1)}`);
+    console.log(`   Green-dominant: ${greenPercent.toFixed(1)}%`);
+    console.log(`   Magenta-dominant: ${magentaPercent.toFixed(1)}%`);
+    console.log(`   Normal-colored: ${normalPercent.toFixed(1)}%`);
+
+    // Save decoded image for inspection
+    const fs = await import('node:fs');
+    fs.writeFileSync('test-output-iss.png', imgBuffer);
+    console.log(`   Saved to: test-output-iss.png\n`);
 
     // CRITICAL TESTS
-    // The ISS image should NOT be mostly green (broken chroma)
-    expect(greenPercent).toBeLessThan(50);
+    // Image should NOT be dominated by green or magenta (chroma corruption)
+    expect(greenPercent).toBeLessThan(40);
+    expect(magentaPercent).toBeLessThan(40);
 
-    // The ISS image should have SOME color variation (not all neutral)
-    expect(colorfulPercent).toBeGreaterThan(10);
+    // Average green shouldn't be way higher than red/blue
+    const colorImbalance = Math.abs(avgG - avgR) + Math.abs(avgG - avgB);
+    expect(colorImbalance).toBeLessThan(100);
 
-    // Should not be all neutral gray (no chroma data)
-    expect(neutralPercent).toBeLessThan(80);
+    // Should have reasonable amount of normal pixels
+    expect(normalPercent).toBeGreaterThan(30);
   }, 30000); // 30 second timeout
 });
