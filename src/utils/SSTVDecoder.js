@@ -232,26 +232,29 @@ export class SSTVDecoder {
         }
       }
 
-      // Find next sync pulse within a reasonable window (2x line duration)
-      const maxLineDuration =
-        (this.mode.syncPulse + this.mode.syncPorch + this.mode.scanTime * 3) * 2;
-      const searchLimit = position + Math.floor(maxLineDuration * this.sampleRate);
-      const nextSync = this.findSyncPulse(samples, position, searchLimit);
-      if (nextSync !== -1) {
-        position = nextSync;
-      } else {
-        // If sync not found, advance by expected line duration
-        // This helps maintain alignment even if sync detection is weak
-        const expectedLinePosition =
-          position + Math.floor(this.mode.scanTime * this.sampleRate * 0.5);
-        if (expectedLinePosition < samples.length) {
-          // Try to find sync in an expanded window
-          const expandedSync = this.findSyncPulse(
-            samples,
-            expectedLinePosition,
-            expectedLinePosition + Math.floor(maxLineDuration * this.sampleRate)
-          );
-          position = expandedSync !== -1 ? expandedSync : expectedLinePosition;
+      // Find next sync pulse only if auto-calibration is enabled (for real-world signals with timing drift)
+      // For perfect encoder-generated signals, trust the position tracking
+      if (this.autoCalibrate) {
+        const maxLineDuration =
+          (this.mode.syncPulse + this.mode.syncPorch + this.mode.scanTime * 3) * 2;
+        const searchLimit = position + Math.floor(maxLineDuration * this.sampleRate);
+        const nextSync = this.findSyncPulse(samples, position, searchLimit);
+        if (nextSync !== -1) {
+          position = nextSync;
+        } else {
+          // If sync not found, advance by expected line duration
+          // This helps maintain alignment even if sync detection is weak
+          const expectedLinePosition =
+            position + Math.floor(this.mode.scanTime * this.sampleRate * 0.5);
+          if (expectedLinePosition < samples.length) {
+            // Try to find sync in an expanded window
+            const expandedSync = this.findSyncPulse(
+              samples,
+              expectedLinePosition,
+              expectedLinePosition + Math.floor(maxLineDuration * this.sampleRate)
+            );
+            position = expandedSync !== -1 ? expandedSync : expectedLinePosition;
+          }
         }
       }
     }
@@ -370,10 +373,10 @@ export class SSTVDecoder {
         freq = this.detectFrequencyRange(samples, pos, availableTime);
       }
 
-      // Map frequency to Y value (video range: 16-235)
+      // Map frequency to Y value (full range: 0-255)
       const normalized = (freq - FREQ_BLACK) / (FREQ_WHITE - FREQ_BLACK);
-      let value = 16 + normalized * (235 - 16);
-      value = Math.max(16, Math.min(235, Math.round(value)));
+      let value = normalized * 255;
+      value = Math.max(0, Math.min(255, Math.round(value)));
 
       // Store Y directly in image data as grayscale (will be corrected later)
       const pixelIdx = (y * this.mode.width + x) * 4;
@@ -429,13 +432,13 @@ export class SSTVDecoder {
         freq = window[2]; // median of 5
       }
 
-      // Map frequency to component value (video range: 16-240)
+      // Map frequency to component value (full range: 0-255)
       // Use calibrated frequencies if offset is set (for ISS signals with frequency shift)
       const freqBlack = this.freqOffset ? FREQ_BLACK + this.freqOffset : FREQ_BLACK;
       const freqWhite = this.freqOffset ? FREQ_WHITE + this.freqOffset : FREQ_WHITE;
       const normalized = (freq - freqBlack) / (freqWhite - freqBlack);
-      let value = 16 + normalized * (240 - 16);
-      value = Math.max(16, Math.min(240, Math.round(value)));
+      let value = normalized * 255;
+      value = Math.max(0, Math.min(255, Math.round(value)));
 
       const chromaValue = value;
 
@@ -512,12 +515,11 @@ export class SSTVDecoder {
           // Get Y (already stored in imageData as R component)
           const Y = imageData.data[idx];
 
-          // ITU-R BT.601 YCbCr to RGB conversion (video range)
-          // Matching the C reference implementation
-          const yTerm = 298.082 * (Y - 16.0);
-          let R = 0.003906 * (yTerm + 408.583 * (V - 128));
-          let G = 0.003906 * (yTerm - 100.291 * (U - 128) - 208.12 * (V - 128));
-          let B = 0.003906 * (yTerm + 516.411 * (U - 128));
+          // YUV to RGB conversion (full range: 0-255)
+          // Y is full range 0-255, U/V are centered at 128 with full range 0-255
+          let R = Y + 1.402 * (V - 128);
+          let G = Y - 0.344136 * (U - 128) - 0.714136 * (V - 128);
+          let B = Y + 1.772 * (U - 128);
 
           // Clamp to valid range
           R = Math.max(0, Math.min(255, Math.round(R)));

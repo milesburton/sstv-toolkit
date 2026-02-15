@@ -179,26 +179,31 @@ export class SSTVEncoder {
     const PORCH_TIME = 0.0015; // 1.5ms porch
     const CHROMA_SCAN_TIME = 0.044; // 44ms for chrominance
 
-    const timePerYPixel = Y_SCAN_TIME / width;
-    const timePerChromaPixel = CHROMA_SCAN_TIME / (width / 2);
-
     // Robot modes: Each line contains Y (luminance) + separator + porch + chrominance
     // Step 1: Send Y (luminance) for full width (88ms total)
+    // Use exact sample positions to avoid cumulative rounding errors
+    const yScanSamples = Math.floor(Y_SCAN_TIME * this.sampleRate);
+
     for (let x = 0; x < width; x++) {
       const idx = (y * width + x) * 4;
       const r = data[idx];
       const g = data[idx + 1];
       const b = data[idx + 2];
 
-      // ITU-R BT.601 Y calculation (video range: 16-235)
-      const Y = 16 + (65.738 * r + 129.057 * g + 25.064 * b) / 256;
-      const clampedY = Math.max(16, Math.min(235, Math.round(Y)));
+      // Y luminance calculation (full range: 0-255)
+      const Y = 0.299 * r + 0.587 * g + 0.114 * b;
+      const clampedY = Math.max(0, Math.min(255, Math.round(Y)));
 
-      // Map Y (16-235) to frequency range
-      const normalized = (clampedY - 16) / (235 - 16);
+      // Map Y (0-255) to frequency range 1500-2300Hz
+      const normalized = clampedY / 255;
       const freq = FREQ_BLACK + normalized * (FREQ_WHITE - FREQ_BLACK);
 
-      this.addTone(samples, freq, timePerYPixel);
+      // Calculate exact duration for this pixel to avoid rounding errors
+      const pixelStartSample = Math.floor((x / width) * yScanSamples);
+      const pixelEndSample = Math.floor(((x + 1) / width) * yScanSamples);
+      const pixelDuration = (pixelEndSample - pixelStartSample) / this.sampleRate;
+
+      this.addTone(samples, freq, pixelDuration);
     }
 
     // Step 2: Separator pulse (4.5ms) - alternates between lines
@@ -212,8 +217,12 @@ export class SSTVEncoder {
     // Step 4: Send chrominance at half horizontal resolution (44ms total)
     // Even lines: V (R-Y) averaged for 2 lines, Odd lines: U (B-Y) averaged for 2 lines
     const isVLine = y % 2 === 0;
+    const chromaScanSamples = Math.floor(CHROMA_SCAN_TIME * this.sampleRate);
+    const halfWidth = width / 2;
 
     for (let x = 0; x < width; x += 2) {
+      const chromaIndex = x / 2; // 0 to 159 for 320 pixels
+
       // Average two adjacent pixels for chroma
       const idx1 = (y * width + x) * 4;
       const idx2 = (y * width + Math.min(x + 1, width - 1)) * 4;
@@ -222,23 +231,26 @@ export class SSTVEncoder {
       const g = (data[idx1 + 1] + data[idx2 + 1]) / 2;
       const b = (data[idx1 + 2] + data[idx2 + 2]) / 2;
 
-      // Convert RGB to CbCr chrominance (ITU-R BT.601, video range)
-      // Cb/Cr: 16-240 (centered at 128)
-      const Cb = 128 + (-37.945 * r - 74.494 * g + 112.439 * b) / 256;
-      const Cr = 128 + (112.439 * r - 94.154 * g - 18.285 * b) / 256;
+      // Convert RGB to UV chrominance (full range: 0-255, centered at 128)
+      const U = 128 + (-0.14713 * r - 0.28886 * g + 0.436 * b);
+      const V = 128 + (0.615 * r - 0.51499 * g - 0.10001 * b);
 
-      // Select U (Cb) or V (Cr) based on line
-      const chromaValue = isVLine ? Cr : Cb;
+      // Select U or V based on line
+      const chromaValue = isVLine ? V : U;
 
-      // Clamp to video range (16-240)
-      const clampedChroma = Math.max(16, Math.min(240, Math.round(chromaValue)));
+      // Clamp to full range (0-255)
+      const clampedChroma = Math.max(0, Math.min(255, Math.round(chromaValue)));
 
-      // Map 16-240 to frequency range 1500-2300 Hz
-      // This matches how the decoder expects it
-      const normalized = (clampedChroma - 16) / (240 - 16);
+      // Map 0-255 to frequency range 1500-2300 Hz
+      const normalized = clampedChroma / 255;
       const freq = FREQ_BLACK + normalized * (FREQ_WHITE - FREQ_BLACK);
 
-      this.addTone(samples, freq, timePerChromaPixel);
+      // Calculate exact duration for this chroma pixel to avoid rounding errors
+      const chromaStartSample = Math.floor((chromaIndex / halfWidth) * chromaScanSamples);
+      const chromaEndSample = Math.floor(((chromaIndex + 1) / halfWidth) * chromaScanSamples);
+      const chromaDuration = (chromaEndSample - chromaStartSample) / this.sampleRate;
+
+      this.addTone(samples, freq, chromaDuration);
     }
   }
 
