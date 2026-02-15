@@ -373,10 +373,10 @@ export class SSTVDecoder {
         freq = this.detectFrequencyRange(samples, pos, availableTime);
       }
 
-      // Map frequency to Y value (full range: 0-255)
+      // Map frequency to Y value (ITU-R BT.601 video range: 16-235)
       const normalized = (freq - FREQ_BLACK) / (FREQ_WHITE - FREQ_BLACK);
-      let value = normalized * 255;
-      value = Math.max(0, Math.min(255, Math.round(value)));
+      let value = 16 + normalized * (235 - 16);
+      value = Math.max(16, Math.min(235, Math.round(value)));
 
       // Store Y directly in image data as grayscale (will be corrected later)
       const pixelIdx = (y * this.mode.width + x) * 4;
@@ -432,13 +432,13 @@ export class SSTVDecoder {
         freq = window[2]; // median of 5
       }
 
-      // Map frequency to component value (full range: 0-255)
+      // Map frequency to component value (ITU-R BT.601 video range: 16-240)
       // Use calibrated frequencies if offset is set (for ISS signals with frequency shift)
       const freqBlack = this.freqOffset ? FREQ_BLACK + this.freqOffset : FREQ_BLACK;
       const freqWhite = this.freqOffset ? FREQ_WHITE + this.freqOffset : FREQ_WHITE;
       const normalized = (freq - freqBlack) / (freqWhite - freqBlack);
-      let value = normalized * 255;
-      value = Math.max(0, Math.min(255, Math.round(value)));
+      let value = 16 + normalized * (240 - 16);
+      value = Math.max(16, Math.min(240, Math.round(value)));
 
       const chromaValue = value;
 
@@ -515,16 +515,20 @@ export class SSTVDecoder {
           // Get Y (already stored in imageData as R component)
           const Y = imageData.data[idx];
 
-          // YUV to RGB conversion (BT.601)
-          // Inverse of encoder: U = 128 + (B-Y)*0.5, V = 128 + (R-Y)*0.5
-          let R = Y + (V - 128) * 2;
-          let G = Y - (0.114 / 0.587) * (U - 128) * 2 - (0.299 / 0.587) * (V - 128) * 2;
-          let B = Y + (U - 128) * 2;
+          // YUV to RGB conversion (ITU-R BT.601 video range)
+          // Based on smolgroot/sstv-decoder proven implementation
+          const yAdj = Y - 16;
+          const uAdj = U - 128;
+          const vAdj = V - 128;
+
+          let R = ((298 * yAdj + 409 * vAdj + 128) >> 8);
+          let G = ((298 * yAdj - 100 * uAdj - 208 * vAdj + 128) >> 8);
+          let B = ((298 * yAdj + 516 * uAdj + 128) >> 8);
 
           // Clamp to valid range
-          R = Math.max(0, Math.min(255, Math.round(R)));
-          G = Math.max(0, Math.min(255, Math.round(G)));
-          B = Math.max(0, Math.min(255, Math.round(B)));
+          R = Math.max(0, Math.min(255, R));
+          G = Math.max(0, Math.min(255, G));
+          B = Math.max(0, Math.min(255, B));
 
           // Update pixel
           imageData.data[idx] = R;
