@@ -515,11 +515,11 @@ export class SSTVDecoder {
           // Get Y (already stored in imageData as R component)
           const Y = imageData.data[idx];
 
-          // YUV to RGB conversion (full range: 0-255)
-          // Y is full range 0-255, U/V are centered at 128 with full range 0-255
-          let R = Y + 1.402 * (V - 128);
-          let G = Y - 0.344136 * (U - 128) - 0.714136 * (V - 128);
-          let B = Y + 1.772 * (U - 128);
+          // YUV to RGB conversion (BT.601)
+          // Inverse of encoder: U = 128 + (B-Y)*0.5, V = 128 + (R-Y)*0.5
+          let R = Y + (V - 128) * 2;
+          let G = Y - (0.114 / 0.587) * (U - 128) * 2 - (0.299 / 0.587) * (V - 128) * 2;
+          let B = Y + (U - 128) * 2;
 
           // Clamp to valid range
           R = Math.max(0, Math.min(255, Math.round(R)));

@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import './App.css';
+import packageJson from '../package.json';
 import { SSTVDecoder } from './utils/SSTVDecoder';
 import { SSTV_MODES, SSTVEncoder } from './utils/SSTVEncoder';
-import packageJson from '../package.json';
 
 function App() {
   // Encoder state

@@ -231,9 +231,11 @@ export class SSTVEncoder {
       const g = (data[idx1 + 1] + data[idx2 + 1]) / 2;
       const b = (data[idx1 + 2] + data[idx2 + 2]) / 2;
 
-      // Convert RGB to UV chrominance (full range: 0-255, centered at 128)
-      const U = 128 + (-0.14713 * r - 0.28886 * g + 0.436 * b);
-      const V = 128 + (0.615 * r - 0.51499 * g - 0.10001 * b);
+      // Convert RGB to UV chrominance (BT.601, centered at 128, range ±127.5)
+      // U = (B - Y) * scale, V = (R - Y) * scale where scale maps to ±127.5
+      const Y = 0.299 * r + 0.587 * g + 0.114 * b;
+      const U = 128 + (b - Y) * 0.5; // 0.5 = 127.5/255
+      const V = 128 + (r - Y) * 0.5; // 0.5 = 127.5/255
 
       // Select U or V based on line
       const chromaValue = isVLine ? V : U;
