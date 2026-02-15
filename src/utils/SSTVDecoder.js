@@ -1,10 +1,13 @@
 // SSTV Decoder - Converts SSTV audio signals to images
 
 import { SSTV_MODES } from './SSTVEncoder.js';
+import { FMDemodulator } from './FMDemodulator.js';
 
 const FREQ_SYNC = 1200;
 const FREQ_BLACK = 1500;
 const FREQ_WHITE = 2300;
+const FREQ_CENTER = 1900; // Center frequency for FM demodulation
+const FREQ_BANDWIDTH = 800; // Bandwidth: 2300 - 1500 = 800 Hz
 
 export class SSTVDecoder {
   constructor(sampleRate = 48000, options = {}) {
@@ -13,6 +16,8 @@ export class SSTVDecoder {
     // Frequency offset for calibration (ISS signals are often -150Hz)
     this.freqOffset = options.freqOffset || 0;
     this.autoCalibrate = options.autoCalibrate !== false; // Default true
+    // Use FM demodulation for better ISS signal handling
+    this.useFMDemod = options.useFMDemod !== false; // Default true
   }
 
   async decodeAudio(audioFile) {
@@ -41,8 +46,159 @@ export class SSTVDecoder {
       console.log('📡 SSTV Mode detected:', this.mode.name);
     }
 
-    // Decode image
+    // Decode image using FM demodulation or Goertzel fallback
+    if (this.useFMDemod) {
+      return this.decodeImageWithFM(samples);
+    }
     return this.decodeImage(samples);
+  }
+
+  /**
+   * Decode image using FM demodulation (better for real-world signals)
+   */
+  decodeImageWithFM(samples) {
+    // Create FM demodulator
+    const fmDemod = new FMDemodulator(FREQ_CENTER, FREQ_BANDWIDTH, this.sampleRate);
+
+    if (typeof window !== 'undefined') {
+      console.log('🔊 Using FM demodulation for improved ISS signal handling');
+    }
+
+    // Demodulate entire signal
+    const demodulated = fmDemod.demodulateAll(samples);
+
+    // Now decode using the frequency stream and original samples (for sync detection)
+    return this.decodeImageFromFrequencyStream(demodulated, samples);
+  }
+
+  /**
+   * Decode image from FM demodulated frequency stream
+   * @param {Float32Array} freqStream - Demodulated frequency values
+   * @param {Float32Array} samples - Original audio samples (for sync detection)
+   */
+  decodeImageFromFrequencyStream(freqStream, samples) {
+    const canvas = document.createElement('canvas');
+    canvas.width = this.mode.width;
+    canvas.height = this.mode.lines;
+
+    const ctx = canvas.getContext('2d');
+    const imageData = ctx.createImageData(canvas.width, canvas.height);
+
+    // Initialize all pixels to black with full opacity
+    for (let i = 0; i < imageData.data.length; i += 4) {
+      imageData.data[i] = 0;
+      imageData.data[i + 1] = 0;
+      imageData.data[i + 2] = 0;
+      imageData.data[i + 3] = 255;
+    }
+
+    // For YUV modes, initialize chroma storage
+    let chromaU = null;
+    let chromaV = null;
+    if (this.mode.colorFormat === 'YUV') {
+      chromaU = new Array(this.mode.width * this.mode.lines).fill(128);
+      chromaV = new Array(this.mode.width * this.mode.lines).fill(128);
+    }
+
+    // Find first sync pulse using original samples (sync at 1200 Hz is outside FM demod bandwidth)
+    let position = this.findSyncPulse(samples, Math.floor(0.6 * this.sampleRate));
+
+    if (position === -1) {
+      throw new Error('Could not find sync pulse. Make sure this is a valid SSTV transmission.');
+    }
+
+    // Decode each line
+    for (let y = 0; y < this.mode.lines && position < freqStream.length; y++) {
+      // Skip sync pulse and porch
+      position += Math.floor((this.mode.syncPulse + this.mode.syncPorch) * this.sampleRate);
+
+      if (this.mode.colorFormat === 'RGB') {
+        // Decode RGB channels (not commonly used for Robot36)
+        position = this.decodeScanLineFromFreqStream(
+          freqStream,
+          position,
+          imageData,
+          y,
+          1
+        );
+        if (this.mode.separatorPulse) {
+          position += Math.floor(this.mode.separatorPulse * this.sampleRate);
+        }
+        position = this.decodeScanLineFromFreqStream(
+          freqStream,
+          position,
+          imageData,
+          y,
+          2
+        );
+        if (this.mode.separatorPulse) {
+          position += Math.floor(this.mode.separatorPulse * this.sampleRate);
+        }
+        position = this.decodeScanLineFromFreqStream(
+          freqStream,
+          position,
+          imageData,
+          y,
+          0
+        );
+      } else {
+        // YUV mode (Robot36)
+        // Decode Y (luminance)
+        position = this.decodeYFromFreqStream(freqStream, position, imageData, y);
+
+        // Skip separator and porch
+        if (position < freqStream.length) {
+          const sepDuration = 0.0045;
+          const isEvenLine = y % 2 === 0;
+          const currentChromaType = isEvenLine ? 'V' : 'U';
+
+          position += Math.floor(sepDuration * this.sampleRate);
+          position += Math.floor(0.0015 * this.sampleRate); // porch
+
+          // Decode chrominance
+          if (position < freqStream.length) {
+            position = this.decodeChromaFromFreqStream(
+              freqStream,
+              position,
+              chromaU,
+              chromaV,
+              y,
+              currentChromaType
+            );
+          }
+        }
+      }
+
+      // Find next sync pulse using original samples
+      if (this.autoCalibrate) {
+        const maxLineDuration =
+          (this.mode.syncPulse + this.mode.syncPorch + this.mode.scanTime * 3) * 2;
+        const searchLimit = position + Math.floor(maxLineDuration * this.sampleRate);
+        const nextSync = this.findSyncPulse(samples, position, searchLimit);
+        if (nextSync !== -1) {
+          position = nextSync;
+        } else {
+          const expectedLinePosition =
+            position + Math.floor(this.mode.scanTime * this.sampleRate * 0.5);
+          if (expectedLinePosition < samples.length) {
+            const expandedSync = this.findSyncPulse(
+              samples,
+              expectedLinePosition,
+              expectedLinePosition + Math.floor(maxLineDuration * this.sampleRate)
+            );
+            position = expandedSync !== -1 ? expandedSync : expectedLinePosition;
+          }
+        }
+      }
+    }
+
+    // Convert YUV to RGB if needed
+    if (this.mode.colorFormat === 'YUV') {
+      this.convertYUVtoRGB(imageData, chromaU, chromaV);
+    }
+
+    ctx.putImageData(imageData, 0, 0);
+    return canvas.toDataURL('image/png');
   }
 
   detectMode(samples) {
@@ -525,9 +681,9 @@ export class SSTVDecoder {
           const uAdj = (U - 128) * saturationFactor;
           const vAdj = (V - 128) * saturationFactor;
 
-          let R = ((298 * yAdj + 409 * vAdj + 128) >> 8);
-          let G = ((298 * yAdj - 100 * uAdj - 208 * vAdj + 128) >> 8);
-          let B = ((298 * yAdj + 516 * uAdj + 128) >> 8);
+          let R = (298 * yAdj + 409 * vAdj + 128) >> 8;
+          let G = (298 * yAdj - 100 * uAdj - 208 * vAdj + 128) >> 8;
+          let B = (298 * yAdj + 516 * uAdj + 128) >> 8;
 
           // Clamp to valid range
           R = Math.max(0, Math.min(255, R));
@@ -637,6 +793,210 @@ export class SSTVDecoder {
     return Math.sqrt(realPart * realPart + imagPart * imagPart) / N;
   }
 
+  /**
+   * Find sync pulse (1200 Hz) in frequency stream
+   */
+  findSyncPulseInFreqStream(freqStream, startPos, endPos = freqStream.length) {
+    const syncDuration = Math.max(0.004, this.mode?.syncPulse || 0.005);
+    const samplesPerCheck = Math.floor(this.sampleRate * 0.0002);
+    const searchEnd = Math.min(endPos, freqStream.length - Math.floor(syncDuration * this.sampleRate));
+
+    // Schmitt trigger for robust sync detection
+    const syncEnterThreshold = 0.5; // Normalized frequency threshold
+    const syncStayThreshold = 0.7;
+    let inSync = false;
+    let syncStart = -1;
+
+    // Target normalized frequency for sync (1200 Hz)
+    // Normalized: (1200 - 1900) / 400 = -1.75
+    const syncFreqNorm = (FREQ_SYNC - FREQ_CENTER) / (FREQ_BANDWIDTH / 2);
+
+    for (let i = startPos; i < searchEnd; i += samplesPerCheck) {
+      // Average frequency over sync duration
+      let avgFreq = 0;
+      const samples = Math.floor(syncDuration * this.sampleRate);
+      for (let j = 0; j < samples && i + j < freqStream.length; j++) {
+        avgFreq += freqStream[i + j];
+      }
+      avgFreq /= samples;
+
+      const deviation = Math.abs(avgFreq - syncFreqNorm);
+
+      if (!inSync && deviation < syncEnterThreshold) {
+        inSync = true;
+        syncStart = i;
+      } else if (inSync && deviation > syncStayThreshold) {
+        const syncLength = (i - syncStart) / this.sampleRate;
+        if (syncLength >= syncDuration * 0.7) {
+          return syncStart;
+        }
+        inSync = false;
+        syncStart = -1;
+      } else if (inSync) {
+        const syncLength = (i - syncStart) / this.sampleRate;
+        if (syncLength >= syncDuration) {
+          return syncStart;
+        }
+      }
+    }
+
+    if (inSync && syncStart !== -1) {
+      const syncLength = (searchEnd - syncStart) / this.sampleRate;
+      if (syncLength >= syncDuration * 0.7) {
+        return syncStart;
+      }
+    }
+
+    return -1;
+  }
+
+  /**
+   * Decode Y (luminance) from frequency stream
+   */
+  decodeYFromFreqStream(freqStream, startPos, imageData, y) {
+    const Y_SCAN_TIME = 0.088;
+    const samplesPerPixel = Math.floor((Y_SCAN_TIME * this.sampleRate) / this.mode.width);
+
+    for (let x = 0; x < this.mode.width; x++) {
+      const pos = startPos + x * samplesPerPixel;
+      if (pos >= freqStream.length) break;
+
+      // Average frequency over pixel duration
+      let avgFreq = 0;
+      const sampleCount = Math.min(samplesPerPixel, freqStream.length - pos);
+      for (let i = 0; i < sampleCount; i++) {
+        avgFreq += freqStream[pos + i];
+      }
+      avgFreq /= sampleCount;
+
+      // Convert normalized frequency to actual Hz
+      // Normalized freq range: -1 to +1 maps to (CENTER - BW/2) to (CENTER + BW/2)
+      const freq = FREQ_CENTER + avgFreq * (FREQ_BANDWIDTH / 2);
+
+      // Map frequency to Y value (ITU-R BT.601 video range: 16-235)
+      const normalized = (freq - FREQ_BLACK) / (FREQ_WHITE - FREQ_BLACK);
+      let value = 16 + normalized * (235 - 16);
+      value = Math.max(16, Math.min(235, Math.round(value)));
+
+      const pixelIdx = (y * this.mode.width + x) * 4;
+      imageData.data[pixelIdx] = value;
+      imageData.data[pixelIdx + 1] = value;
+      imageData.data[pixelIdx + 2] = value;
+      imageData.data[pixelIdx + 3] = 255;
+    }
+
+    return startPos + Math.floor(Y_SCAN_TIME * this.sampleRate);
+  }
+
+  /**
+   * Decode chrominance from frequency stream
+   */
+  decodeChromaFromFreqStream(freqStream, startPos, chromaU, chromaV, y, componentType) {
+    const CHROMA_SCAN_TIME = 0.044;
+    const halfWidth = Math.floor(this.mode.width / 2);
+    const samplesPerPixel = Math.floor((CHROMA_SCAN_TIME * this.sampleRate) / halfWidth);
+
+    const rawChroma = [];
+    for (let x = 0; x < halfWidth; x++) {
+      const pos = startPos + x * samplesPerPixel;
+      if (pos >= freqStream.length) {
+        rawChroma.push(rawChroma[rawChroma.length - 1] || 128);
+        continue;
+      }
+
+      // Average frequency over pixel duration
+      let avgFreq = 0;
+      const sampleCount = Math.min(samplesPerPixel, freqStream.length - pos);
+      for (let i = 0; i < sampleCount; i++) {
+        avgFreq += freqStream[pos + i];
+      }
+      avgFreq /= sampleCount;
+
+      // Convert normalized frequency to actual Hz
+      const freq = FREQ_CENTER + avgFreq * (FREQ_BANDWIDTH / 2);
+
+      // Map frequency to chroma value (ITU-R BT.601 video range: 16-240)
+      const freqBlack = this.freqOffset ? FREQ_BLACK + this.freqOffset : FREQ_BLACK;
+      const freqWhite = this.freqOffset ? FREQ_WHITE + this.freqOffset : FREQ_WHITE;
+      const normalized = (freq - freqBlack) / (freqWhite - freqBlack);
+      let value = 16 + normalized * (240 - 16);
+      value = Math.max(16, Math.min(240, Math.round(value)));
+
+      rawChroma.push(value);
+    }
+
+    // Apply simple median filter for noise reduction
+    const filteredChroma = [];
+    for (let x = 0; x < halfWidth; x++) {
+      if (x >= 2 && x < halfWidth - 2) {
+        const window = [
+          rawChroma[x - 2],
+          rawChroma[x - 1],
+          rawChroma[x],
+          rawChroma[x + 1],
+          rawChroma[x + 2],
+        ].sort((a, b) => a - b);
+        filteredChroma.push(window[2]);
+      } else {
+        filteredChroma.push(rawChroma[x]);
+      }
+    }
+
+    // Store chroma values
+    for (let x = 0; x < halfWidth; x++) {
+      const chromaValue = filteredChroma[x];
+      const idx1 = y * this.mode.width + x * 2;
+      const idx2 = y * this.mode.width + x * 2 + 1;
+
+      if (componentType === 'U') {
+        chromaU[idx1] = chromaValue;
+        if (idx2 < this.mode.width * this.mode.lines) {
+          chromaU[idx2] = chromaValue;
+        }
+      } else if (componentType === 'V') {
+        chromaV[idx1] = chromaValue;
+        if (idx2 < this.mode.width * this.mode.lines) {
+          chromaV[idx2] = chromaValue;
+        }
+      }
+    }
+
+    return startPos + Math.floor(CHROMA_SCAN_TIME * this.sampleRate);
+  }
+
+  /**
+   * Decode scan line from frequency stream (for RGB modes)
+   */
+  decodeScanLineFromFreqStream(freqStream, startPos, imageData, y, channel) {
+    const samplesPerPixel = Math.floor((this.mode.scanTime * this.sampleRate) / this.mode.width);
+
+    for (let x = 0; x < this.mode.width; x++) {
+      const pos = startPos + x * samplesPerPixel;
+      if (pos >= freqStream.length) break;
+
+      // Average frequency over pixel duration
+      let avgFreq = 0;
+      const sampleCount = Math.min(samplesPerPixel, freqStream.length - pos);
+      for (let i = 0; i < sampleCount; i++) {
+        avgFreq += freqStream[pos + i];
+      }
+      avgFreq /= sampleCount;
+
+      // Convert normalized frequency to actual Hz
+      const freq = FREQ_CENTER + avgFreq * (FREQ_BANDWIDTH / 2);
+
+      // Map frequency to pixel value
+      let value = ((freq - FREQ_BLACK) / (FREQ_WHITE - FREQ_BLACK)) * 255;
+      value = Math.max(0, Math.min(255, Math.round(value)));
+
+      const idx = (y * this.mode.width + x) * 4;
+      imageData.data[idx + channel] = value;
+      imageData.data[idx + 3] = 255;
+    }
+
+    return startPos + Math.floor(this.mode.scanTime * this.sampleRate);
+  }
+
   async decodeWithMode(audioFile, modeName) {
     this.mode = SSTV_MODES[modeName];
 
@@ -649,6 +1009,9 @@ export class SSTVDecoder {
     const samples = audioBuffer.getChannelData(0);
     this.sampleRate = audioBuffer.sampleRate;
 
+    if (this.useFMDemod) {
+      return this.decodeImageWithFM(samples);
+    }
     return this.decodeImage(samples);
   }
 }
