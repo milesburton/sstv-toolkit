@@ -190,13 +190,14 @@ export class SSTVEncoder {
       const g = data[idx + 1];
       const b = data[idx + 2];
 
-      // Y luminance calculation (ITU-R BT.601 video range: 16-235)
-      const Y = 16 + (65.738 * r + 129.057 * g + 24.064 * b) / 256;
-      const clampedY = Math.max(16, Math.min(235, Math.round(Y)));
+      // Y luminance calculation (FULL RANGE 0-255, NOT video range!)
+      // Robot36 uses full range per PySSTV: calc_lum = (freq - 1500) / 3.1372549
+      // where 3.1372549 = 800/255
+      const Y = 0.299 * r + 0.587 * g + 0.114 * b;
+      const clampedY = Math.max(0, Math.min(255, Math.round(Y)));
 
-      // Map Y (16-235) to frequency range 1500-2300Hz
-      const normalized = (clampedY - 16) / (235 - 16);
-      const freq = FREQ_BLACK + normalized * (FREQ_WHITE - FREQ_BLACK);
+      // Map Y (0-255) to frequency range 1500-2300Hz
+      const freq = FREQ_BLACK + (clampedY / 255) * (FREQ_WHITE - FREQ_BLACK);
 
       // Calculate exact duration for this pixel to avoid rounding errors
       const pixelStartSample = Math.floor((x / width) * yScanSamples);
@@ -231,19 +232,19 @@ export class SSTVEncoder {
       const g = (data[idx1 + 1] + data[idx2 + 1]) / 2;
       const b = (data[idx1 + 2] + data[idx2 + 2]) / 2;
 
-      // Convert RGB to UV chrominance (ITU-R BT.601 video range: 16-240)
-      const U = 128 + (-37.945 * r - 74.494 * g + 112.439 * b) / 256;
-      const V = 128 + (112.439 * r - 94.154 * g - 18.285 * b) / 256;
+      // Convert RGB to UV chrominance (FULL RANGE 0-255, NOT video range!)
+      // Robot36 uses full range per memory documentation
+      const U = 128 + (-0.14713 * r - 0.28886 * g + 0.436 * b);
+      const V = 128 + (0.615 * r - 0.51499 * g - 0.10001 * b);
 
       // Select U or V based on line
       const chromaValue = isVLine ? V : U;
 
-      // Clamp to video range (16-240)
-      const clampedChroma = Math.max(16, Math.min(240, Math.round(chromaValue)));
+      // Clamp to full range (0-255)
+      const clampedChroma = Math.max(0, Math.min(255, Math.round(chromaValue)));
 
-      // Map (16-240) to frequency range 1500-2300 Hz
-      const normalized = (clampedChroma - 16) / (240 - 16);
-      const freq = FREQ_BLACK + normalized * (FREQ_WHITE - FREQ_BLACK);
+      // Map (0-255) to frequency range 1500-2300 Hz
+      const freq = FREQ_BLACK + (clampedChroma / 255) * (FREQ_WHITE - FREQ_BLACK);
 
       // Calculate exact duration for this chroma pixel to avoid rounding errors
       const chromaStartSample = Math.floor((chromaIndex / halfWidth) * chromaScanSamples);

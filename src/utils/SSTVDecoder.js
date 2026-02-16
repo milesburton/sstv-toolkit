@@ -508,10 +508,11 @@ export class SSTVDecoder {
         freq = this.detectFrequencyRange(samples, pos, availableTime);
       }
 
-      // Map frequency to Y value (ITU-R BT.601 video range: 16-235)
+      // Map frequency to Y value (FULL RANGE 0-255, NOT video range!)
+      // Robot36 uses full range per PySSTV: value = ((freq - 1500) / 800) * 255
       const normalized = (freq - FREQ_BLACK) / (FREQ_WHITE - FREQ_BLACK);
-      let value = 16 + normalized * (235 - 16);
-      value = Math.max(16, Math.min(235, Math.round(value)));
+      let value = normalized * 255;
+      value = Math.max(0, Math.min(255, Math.round(value)));
 
       // Store Y directly in image data as grayscale (will be corrected later)
       const pixelIdx = (y * this.mode.width + x) * 4;
@@ -567,13 +568,14 @@ export class SSTVDecoder {
         freq = window[2]; // median of 5
       }
 
-      // Map frequency to component value (ITU-R BT.601 video range: 16-240)
+      // Map frequency to component value (FULL RANGE 0-255, NOT video range!)
+      // Robot36 uses full range per memory documentation
       // Use calibrated frequencies if offset is set (for ISS signals with frequency shift)
       const freqBlack = this.freqOffset ? FREQ_BLACK + this.freqOffset : FREQ_BLACK;
       const freqWhite = this.freqOffset ? FREQ_WHITE + this.freqOffset : FREQ_WHITE;
       const normalized = (freq - freqBlack) / (freqWhite - freqBlack);
-      let value = 16 + normalized * (240 - 16);
-      value = Math.max(16, Math.min(240, Math.round(value)));
+      let value = normalized * 255;
+      value = Math.max(0, Math.min(255, Math.round(value)));
 
       const chromaValue = value;
 
@@ -610,7 +612,8 @@ export class SSTVDecoder {
   }
 
   convertYUVtoRGB(imageData, chromaU, chromaV) {
-    // Convert YUV to RGB using ITU-R BT.601 standard
+    // Convert YUV to RGB using FULL RANGE formulas (0-255, NOT video range!)
+    // Per memory documentation, Robot36 uses full range YUV
     // Process line pairs: even line has V (R-Y), odd line has U (B-Y)
     // Both lines in a pair use the same chrominance values
     for (let y = 0; y < this.mode.lines; y += 2) {
@@ -650,24 +653,19 @@ export class SSTVDecoder {
           // Get Y (already stored in imageData as R component)
           const Y = imageData.data[idx];
 
-          // YUV to RGB conversion (ITU-R BT.601 video range)
-          // Based on smolgroot/sstv-decoder proven implementation
-          const yAdj = Y - 16;
-
-          // Apply chroma saturation reduction for noisy real-world signals
-          // Only reduce saturation for signals with auto-calibration enabled (ISS)
-          const saturationFactor = this.autoCalibrate ? 0.85 : 1.0;
-          const uAdj = (U - 128) * saturationFactor;
-          const vAdj = (V - 128) * saturationFactor;
-
-          let R = (298 * yAdj + 409 * vAdj + 128) >> 8;
-          let G = (298 * yAdj - 100 * uAdj - 208 * vAdj + 128) >> 8;
-          let B = (298 * yAdj + 516 * uAdj + 128) >> 8;
+          // YUV to RGB conversion (FULL RANGE, NOT video range!)
+          // Per memory documentation:
+          // R = Y + 1.402*(V - 128)
+          // G = Y - 0.344136*(U - 128) - 0.714136*(V - 128)
+          // B = Y + 1.772*(U - 128)
+          let R = Y + 1.402 * (V - 128);
+          let G = Y - 0.344136 * (U - 128) - 0.714136 * (V - 128);
+          let B = Y + 1.772 * (U - 128);
 
           // Clamp to valid range
-          R = Math.max(0, Math.min(255, R));
-          G = Math.max(0, Math.min(255, G));
-          B = Math.max(0, Math.min(255, B));
+          R = Math.max(0, Math.min(255, Math.round(R)));
+          G = Math.max(0, Math.min(255, Math.round(G)));
+          B = Math.max(0, Math.min(255, Math.round(B)));
 
           // Update pixel
           imageData.data[idx] = R;
@@ -855,10 +853,11 @@ export class SSTVDecoder {
       // Normalized freq range: -1 to +1 maps to (CENTER - BW/2) to (CENTER + BW/2)
       const freq = FREQ_CENTER + avgFreq * (FREQ_BANDWIDTH / 2);
 
-      // Map frequency to Y value (ITU-R BT.601 video range: 16-235)
+      // Map frequency to Y value (FULL RANGE 0-255, NOT video range!)
+      // Robot36 uses full range per PySSTV: value = ((freq - 1500) / 800) * 255
       const normalized = (freq - FREQ_BLACK) / (FREQ_WHITE - FREQ_BLACK);
-      let value = 16 + normalized * (235 - 16);
-      value = Math.max(16, Math.min(235, Math.round(value)));
+      let value = normalized * 255;
+      value = Math.max(0, Math.min(255, Math.round(value)));
 
       const pixelIdx = (y * this.mode.width + x) * 4;
       imageData.data[pixelIdx] = value;
@@ -897,12 +896,13 @@ export class SSTVDecoder {
       // Convert normalized frequency to actual Hz
       const freq = FREQ_CENTER + avgFreq * (FREQ_BANDWIDTH / 2);
 
-      // Map frequency to chroma value (ITU-R BT.601 video range: 16-240)
+      // Map frequency to chroma value (FULL RANGE 0-255, NOT video range!)
+      // Robot36 uses full range per memory documentation
       const freqBlack = this.freqOffset ? FREQ_BLACK + this.freqOffset : FREQ_BLACK;
       const freqWhite = this.freqOffset ? FREQ_WHITE + this.freqOffset : FREQ_WHITE;
       const normalized = (freq - freqBlack) / (freqWhite - freqBlack);
-      let value = 16 + normalized * (240 - 16);
-      value = Math.max(16, Math.min(240, Math.round(value)));
+      let value = normalized * 255;
+      value = Math.max(0, Math.min(255, Math.round(value)));
 
       rawChroma.push(value);
     }
