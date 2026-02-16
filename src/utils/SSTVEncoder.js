@@ -12,6 +12,18 @@ const SSTV_MODES = {
     syncPorch: 0.003,
     colorFormat: 'YUV',
   },
+  PD120: {
+    name: 'PD 120',
+    visCode: 0x5d, // 93 decimal
+    scanTime: 0.532, // seconds per line pair (20ms sync + 2.08ms porch + 4×121.6ms components)
+    lines: 496,
+    width: 640,
+    colorScan: true,
+    syncPulse: 0.02, // 20ms
+    syncPorch: 0.00208, // 2.08ms
+    componentTime: 0.1216, // 121.6ms per component (Y0, R-Y, B-Y, Y1)
+    colorFormat: 'PD', // PD uses Y/R-Y/B-Y format
+  },
   MARTIN1: {
     name: 'Martin M1',
     visCode: 0x2c,
@@ -126,34 +138,42 @@ export class SSTVEncoder {
   addImageData(samples, imageData) {
     const { data, width, height } = imageData;
 
-    for (let y = 0; y < height; y++) {
-      // Sync pulse
-      this.addTone(samples, FREQ_SYNC, this.mode.syncPulse);
+    if (this.mode.colorFormat === 'PD') {
+      // PD modes: Process line pairs (Y0, R-Y, B-Y, Y1)
+      for (let y = 0; y < height; y += 2) {
+        this.addScanLinePD(samples, data, width, y);
+      }
+    } else {
+      // Robot and RGB modes: Process single lines
+      for (let y = 0; y < height; y++) {
+        // Sync pulse
+        this.addTone(samples, FREQ_SYNC, this.mode.syncPulse);
 
-      // Sync porch
-      this.addTone(samples, FREQ_BLACK, this.mode.syncPorch);
+        // Sync porch
+        this.addTone(samples, FREQ_BLACK, this.mode.syncPorch);
 
-      if (this.mode.colorFormat === 'RGB') {
-        // RGB scan (separate scans for each color)
-        // Green scan
-        this.addScanLine(samples, data, width, y, 1); // G channel
+        if (this.mode.colorFormat === 'RGB') {
+          // RGB scan (separate scans for each color)
+          // Green scan
+          this.addScanLine(samples, data, width, y, 1); // G channel
 
-        if (this.mode.separatorPulse) {
-          this.addTone(samples, FREQ_SYNC, this.mode.separatorPulse);
+          if (this.mode.separatorPulse) {
+            this.addTone(samples, FREQ_SYNC, this.mode.separatorPulse);
+          }
+
+          // Blue scan
+          this.addScanLine(samples, data, width, y, 2); // B channel
+
+          if (this.mode.separatorPulse) {
+            this.addTone(samples, FREQ_SYNC, this.mode.separatorPulse);
+          }
+
+          // Red scan
+          this.addScanLine(samples, data, width, y, 0); // R channel
+        } else {
+          // YUV scan (Robot modes): Each line has Y + separator + chrominance
+          this.addScanLineYUV(samples, data, width, y);
         }
-
-        // Blue scan
-        this.addScanLine(samples, data, width, y, 2); // B channel
-
-        if (this.mode.separatorPulse) {
-          this.addTone(samples, FREQ_SYNC, this.mode.separatorPulse);
-        }
-
-        // Red scan
-        this.addScanLine(samples, data, width, y, 0); // R channel
-      } else {
-        // YUV scan (Robot modes): Each line has Y + separator + chrominance
-        this.addScanLineYUV(samples, data, width, y);
       }
     }
   }
@@ -252,6 +272,111 @@ export class SSTVEncoder {
       const chromaDuration = (chromaEndSample - chromaStartSample) / this.sampleRate;
 
       this.addTone(samples, freq, chromaDuration);
+    }
+  }
+
+  addScanLinePD(samples, data, width, y) {
+    // PD120 format: Each line pair has sync + porch + Y0 + R-Y + B-Y + Y1
+    // Y0 = luminance from first line (y)
+    // Y1 = luminance from second line (y+1)
+    // R-Y and B-Y are averaged from both lines
+
+    const COMPONENT_TIME = this.mode.componentTime; // 121.6ms per component
+    const componentSamples = Math.floor(COMPONENT_TIME * this.sampleRate);
+
+    // Sync pulse
+    this.addTone(samples, FREQ_SYNC, this.mode.syncPulse);
+
+    // Porch
+    this.addTone(samples, FREQ_BLACK, this.mode.syncPorch);
+
+    // Process Y0 (first line)
+    for (let x = 0; x < width; x++) {
+      const idx0 = (y * width + x) * 4;
+      const r0 = data[idx0];
+      const g0 = data[idx0 + 1];
+      const b0 = data[idx0 + 2];
+
+      // Calculate Y luminance (full range)
+      const Y0 = 0.299 * r0 + 0.587 * g0 + 0.114 * b0;
+      const clampedY0 = Math.max(0, Math.min(255, Math.round(Y0)));
+
+      const freq = FREQ_BLACK + (clampedY0 / 255) * (FREQ_WHITE - FREQ_BLACK);
+
+      // Calculate exact duration for this pixel
+      const pixelStartSample = Math.floor((x / width) * componentSamples);
+      const pixelEndSample = Math.floor(((x + 1) / width) * componentSamples);
+      const pixelDuration = (pixelEndSample - pixelStartSample) / this.sampleRate;
+
+      this.addTone(samples, freq, pixelDuration);
+    }
+
+    // Process R-Y and B-Y (averaged from both lines)
+    const y1 = Math.min(y + 1, this.mode.lines - 1); // Second line (clamped to image bounds)
+
+    for (let x = 0; x < width; x++) {
+      const idx0 = (y * width + x) * 4;
+      const idx1 = (y1 * width + x) * 4;
+
+      // Average RGB from both lines
+      const r = (data[idx0] + data[idx1]) / 2;
+      const g = (data[idx0 + 1] + data[idx1 + 1]) / 2;
+      const b = (data[idx0 + 2] + data[idx1 + 2]) / 2;
+
+      // Calculate Y for R-Y and B-Y computation
+      const Y = 0.299 * r + 0.587 * g + 0.114 * b;
+
+      // Calculate R-Y (full range, centered at 128)
+      const RY = 128 + 0.701 * (r - Y);
+      const clampedRY = Math.max(0, Math.min(255, Math.round(RY)));
+
+      const pixelStartSample = Math.floor((x / width) * componentSamples);
+      const pixelEndSample = Math.floor(((x + 1) / width) * componentSamples);
+      const pixelDuration = (pixelEndSample - pixelStartSample) / this.sampleRate;
+
+      // Send R-Y
+      const freqRY = FREQ_BLACK + (clampedRY / 255) * (FREQ_WHITE - FREQ_BLACK);
+      this.addTone(samples, freqRY, pixelDuration);
+    }
+
+    // Send B-Y (separate loop)
+    for (let x = 0; x < width; x++) {
+      const idx0 = (y * width + x) * 4;
+      const idx1 = (y1 * width + x) * 4;
+
+      const r = (data[idx0] + data[idx1]) / 2;
+      const g = (data[idx0 + 1] + data[idx1 + 1]) / 2;
+      const b = (data[idx0 + 2] + data[idx1 + 2]) / 2;
+
+      const Y = 0.299 * r + 0.587 * g + 0.114 * b;
+      const BY = 128 + 0.886 * (b - Y);
+      const clampedBY = Math.max(0, Math.min(255, Math.round(BY)));
+
+      const pixelStartSample = Math.floor((x / width) * componentSamples);
+      const pixelEndSample = Math.floor(((x + 1) / width) * componentSamples);
+      const pixelDuration = (pixelEndSample - pixelStartSample) / this.sampleRate;
+
+      const freqBY = FREQ_BLACK + (clampedBY / 255) * (FREQ_WHITE - FREQ_BLACK);
+      this.addTone(samples, freqBY, pixelDuration);
+    }
+
+    // Process Y1 (second line)
+    for (let x = 0; x < width; x++) {
+      const idx1 = (y1 * width + x) * 4;
+      const r1 = data[idx1];
+      const g1 = data[idx1 + 1];
+      const b1 = data[idx1 + 2];
+
+      const Y1 = 0.299 * r1 + 0.587 * g1 + 0.114 * b1;
+      const clampedY1 = Math.max(0, Math.min(255, Math.round(Y1)));
+
+      const freq = FREQ_BLACK + (clampedY1 / 255) * (FREQ_WHITE - FREQ_BLACK);
+
+      const pixelStartSample = Math.floor((x / width) * componentSamples);
+      const pixelEndSample = Math.floor(((x + 1) / width) * componentSamples);
+      const pixelDuration = (pixelEndSample - pixelStartSample) / this.sampleRate;
+
+      this.addTone(samples, freq, pixelDuration);
     }
   }
 
