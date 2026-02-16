@@ -26,3 +26,10 @@ dist-ssr
 # Playwright
 playwright-report/
 test-results/
+
+# Test outputs
+test-output-*.png
+decoded-*.png
+test-pattern.png
+check-samplerate.html
+debug-test.html

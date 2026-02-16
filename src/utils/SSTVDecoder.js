@@ -256,11 +256,11 @@ export class SSTVDecoder {
       imageData.data[i + 3] = 255; // A - critical for visibility
     }
 
-    // For YUV modes, we need temporary storage for chrominance
+    // For YUV and PD modes, we need temporary storage for chrominance
     // Initialize to 128 (neutral gray) instead of 0 to prevent green tint if decoding fails
     let chromaU = null;
     let chromaV = null;
-    if (this.mode.colorFormat === 'YUV') {
+    if (this.mode.colorFormat === 'YUV' || this.mode.colorFormat === 'PD') {
       chromaU = new Array(this.mode.width * this.mode.lines).fill(128);
       chromaV = new Array(this.mode.width * this.mode.lines).fill(128);
     }
@@ -286,12 +286,34 @@ export class SSTVDecoder {
       throw new Error('Could not find sync pulse. Make sure this is a valid SSTV transmission.');
     }
 
-    // Decode each line
-    for (let y = 0; y < this.mode.lines && position < samples.length; y++) {
-      // Skip sync pulse and porch
-      position += Math.floor((this.mode.syncPulse + this.mode.syncPorch) * this.sampleRate);
+    // Decode each line (or line pair for PD modes)
+    if (this.mode.colorFormat === 'PD') {
+      // PD modes: Process line pairs (Y0, R-Y, B-Y, Y1)
+      for (let y = 0; y < this.mode.lines; y += 2) {
+        // Skip sync pulse and porch
+        position += Math.floor((this.mode.syncPulse + this.mode.syncPorch) * this.sampleRate);
 
-      if (this.mode.colorFormat === 'RGB') {
+        // Decode the line pair
+        position = this.decodeScanLinePD(samples, position, imageData, chromaU, chromaV, y);
+
+        // Find next sync pulse if auto-calibration enabled
+        if (this.autoCalibrate && y + 2 < this.mode.lines) {
+          const maxLineDuration =
+            (this.mode.syncPulse + this.mode.syncPorch + this.mode.componentTime * 4) * 2;
+          const searchLimit = position + Math.floor(maxLineDuration * this.sampleRate);
+          const nextSync = this.findSyncPulse(samples, position, searchLimit);
+          if (nextSync !== -1) {
+            position = nextSync;
+          }
+        }
+      }
+    } else {
+      // Standard line-by-line decoding for RGB and YUV modes
+      for (let y = 0; y < this.mode.lines && position < samples.length; y++) {
+        // Skip sync pulse and porch
+        position += Math.floor((this.mode.syncPulse + this.mode.syncPorch) * this.sampleRate);
+
+        if (this.mode.colorFormat === 'RGB') {
         // Decode Green
         position = this.decodeScanLine(samples, position, imageData, y, 1);
 
@@ -393,10 +415,13 @@ export class SSTVDecoder {
         }
       }
     }
+    }
 
-    // After decoding all lines, convert YUV to RGB if needed
+    // After decoding all lines, convert to RGB if needed
     if (this.mode.colorFormat === 'YUV') {
       this.convertYUVtoRGB(imageData, chromaU, chromaV);
+    } else if (this.mode.colorFormat === 'PD') {
+      this.convertPDtoRGB(imageData, chromaU, chromaV);
     }
 
     ctx.putImageData(imageData, 0, 0);
@@ -611,6 +636,106 @@ export class SSTVDecoder {
     return startPos + Math.floor(CHROMA_SCAN_TIME * this.sampleRate);
   }
 
+  decodeScanLinePD(samples, startPos, imageData, chromaU, chromaV, y) {
+    // PD120 format: Decode line pair (Y0, R-Y, B-Y, Y1)
+    // Each component is 121.6ms at full width (640 pixels for PD120)
+    const COMPONENT_TIME = this.mode.componentTime; // 0.1216s
+    const width = this.mode.width;
+    const lines = this.mode.lines;
+    let position = startPos;
+
+    const y1 = Math.min(y + 1, lines - 1);
+
+    // Helper to detect frequency at current position
+    const detectFreq = (pos, duration) => {
+      return this.detectFrequencyRange(samples, pos, duration);
+    };
+
+    // Calculate exact sample positions to avoid rounding errors
+    const totalSamples = Math.floor(COMPONENT_TIME * this.sampleRate);
+
+    // 1. Decode Y0 (first line luminance) - 640 pixels
+    for (let x = 0; x < width; x++) {
+      const startSample = Math.floor((x / width) * totalSamples);
+      const endSample = Math.floor(((x + 1) / width) * totalSamples);
+      const duration = (endSample - startSample) / this.sampleRate;
+
+      const freq = detectFreq(position, duration);
+      const normalized = (freq - FREQ_BLACK) / (FREQ_WHITE - FREQ_BLACK);
+      let value = normalized * 255;
+      value = Math.max(0, Math.min(255, Math.round(value)));
+
+      const pixelIdx = (y * width + x) * 4;
+      imageData.data[pixelIdx] = value;
+      imageData.data[pixelIdx + 1] = value;
+      imageData.data[pixelIdx + 2] = value;
+      imageData.data[pixelIdx + 3] = 255;
+
+      position += (endSample - startSample);
+    }
+
+    // 2. Decode R-Y - 640 pixels
+    position = startPos + totalSamples;
+    for (let x = 0; x < width; x++) {
+      const startSample = Math.floor((x / width) * totalSamples);
+      const endSample = Math.floor(((x + 1) / width) * totalSamples);
+      const duration = (endSample - startSample) / this.sampleRate;
+
+      const freq = detectFreq(position, duration);
+      const normalized = (freq - FREQ_BLACK) / (FREQ_WHITE - FREQ_BLACK);
+      let value = normalized * 255;
+      value = Math.max(0, Math.min(255, Math.round(value)));
+
+      // Store R-Y for both lines in the pair
+      chromaV[y * width + x] = value;
+      chromaV[y1 * width + x] = value;
+
+      position += (endSample - startSample);
+    }
+
+    // 3. Decode B-Y - 640 pixels
+    position = startPos + (totalSamples * 2);
+    for (let x = 0; x < width; x++) {
+      const startSample = Math.floor((x / width) * totalSamples);
+      const endSample = Math.floor(((x + 1) / width) * totalSamples);
+      const duration = (endSample - startSample) / this.sampleRate;
+
+      const freq = detectFreq(position, duration);
+      const normalized = (freq - FREQ_BLACK) / (FREQ_WHITE - FREQ_BLACK);
+      let value = normalized * 255;
+      value = Math.max(0, Math.min(255, Math.round(value)));
+
+      // Store B-Y for both lines in the pair
+      chromaU[y * width + x] = value;
+      chromaU[y1 * width + x] = value;
+
+      position += (endSample - startSample);
+    }
+
+    // 4. Decode Y1 (second line luminance) - 640 pixels
+    position = startPos + (totalSamples * 3);
+    for (let x = 0; x < width; x++) {
+      const startSample = Math.floor((x / width) * totalSamples);
+      const endSample = Math.floor(((x + 1) / width) * totalSamples);
+      const duration = (endSample - startSample) / this.sampleRate;
+
+      const freq = detectFreq(position, duration);
+      const normalized = (freq - FREQ_BLACK) / (FREQ_WHITE - FREQ_BLACK);
+      let value = normalized * 255;
+      value = Math.max(0, Math.min(255, Math.round(value)));
+
+      const pixelIdx = (y1 * width + x) * 4;
+      imageData.data[pixelIdx] = value;
+      imageData.data[pixelIdx + 1] = value;
+      imageData.data[pixelIdx + 2] = value;
+      imageData.data[pixelIdx + 3] = 255;
+
+      position += (endSample - startSample);
+    }
+
+    return startPos + (totalSamples * 4);
+  }
+
   convertYUVtoRGB(imageData, chromaU, chromaV) {
     // Convert YUV to RGB using FULL RANGE formulas (0-255, NOT video range!)
     // Per memory documentation, Robot36 uses full range YUV
@@ -672,6 +797,46 @@ export class SSTVDecoder {
           imageData.data[idx + 1] = G;
           imageData.data[idx + 2] = B;
         }
+      }
+    }
+  }
+
+  convertPDtoRGB(imageData, chromaU, chromaV) {
+    // Convert PD format (Y, R-Y, B-Y) to RGB using full range
+    const width = this.mode.width;
+    const lines = this.mode.lines;
+
+    for (let y = 0; y < lines; y++) {
+      for (let x = 0; x < width; x++) {
+        const idx = (y * width + x) * 4;
+
+        // Get Y (already stored as grayscale)
+        const Y = imageData.data[idx];
+
+        // Get R-Y and B-Y
+        const RY = chromaV[y * width + x] || 128;
+        const BY = chromaU[y * width + x] || 128;
+
+        // Convert to RGB using PD formulas (full range)
+        // R = Y + (R-Y)
+        // B = Y + (B-Y)
+        // G = Y - 0.194*(B-Y) - 0.509*(R-Y)
+        const RYadj = RY - 128;
+        const BYadj = BY - 128;
+
+        let R = Y + RYadj;
+        let G = Y - 0.194 * BYadj - 0.509 * RYadj;
+        let B = Y + BYadj;
+
+        // Clamp to valid range
+        R = Math.max(0, Math.min(255, Math.round(R)));
+        G = Math.max(0, Math.min(255, Math.round(G)));
+        B = Math.max(0, Math.min(255, Math.round(B)));
+
+        // Update pixel
+        imageData.data[idx] = R;
+        imageData.data[idx + 1] = G;
+        imageData.data[idx + 2] = B;
       }
     }
   }
