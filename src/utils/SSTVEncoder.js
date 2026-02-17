@@ -166,7 +166,8 @@ export class SSTVEncoder {
     for (let x = 0; x < width; x++) {
       const idx = (y * width + x) * 4;
       const Y = 0.299 * data[idx] + 0.587 * data[idx + 1] + 0.114 * data[idx + 2];
-      const freq = FREQ_BLACK + (Math.max(0, Math.min(255, Math.round(Y))) / 255) * (FREQ_WHITE - FREQ_BLACK);
+      const freq =
+        FREQ_BLACK + (Math.max(0, Math.min(255, Math.round(Y))) / 255) * (FREQ_WHITE - FREQ_BLACK);
 
       const start = Math.floor((x / width) * yScanSamples);
       const end = Math.floor(((x + 1) / width) * yScanSamples);

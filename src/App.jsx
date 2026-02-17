@@ -512,9 +512,7 @@ function App() {
           {' • '}
           <span className="version">v{__APP_VERSION__}</span>
           {' • '}
-          <span className="build-info">
-            Build {__BUILD_DATE__}
-          </span>
+          <span className="build-info">Build {__BUILD_DATE__}</span>
           {DEBUG_MODE && (
             <>
               {' • '}

@@ -280,11 +280,7 @@ export class SSTVDecoder {
         if (this.autoCalibrate) {
           const lineSamples = Math.floor(this.mode.scanTime * this.sampleRate);
           const tolerance = Math.floor(lineSamples * 0.1);
-          const nextSync = this.findSyncPulse(
-            samples,
-            position - tolerance,
-            position + tolerance
-          );
+          const nextSync = this.findSyncPulse(samples, position - tolerance, position + tolerance);
           if (nextSync !== -1) {
             position = nextSync;
           }
