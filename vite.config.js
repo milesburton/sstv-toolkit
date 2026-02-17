@@ -8,5 +8,6 @@ export default defineConfig({
   base: '/sstv-toolkit/',
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
+    __BUILD_DATE__: JSON.stringify(new Date().toISOString().slice(0, 16).replace('T', ' ')),
   },
 });

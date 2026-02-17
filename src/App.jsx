@@ -513,7 +513,7 @@ function App() {
           <span className="version">v{__APP_VERSION__}</span>
           {' • '}
           <span className="build-info">
-            Build {new Date().toISOString().slice(0, 16).replace('T', ' ')}
+            Build {__BUILD_DATE__}
           </span>
           {DEBUG_MODE && (
             <>
