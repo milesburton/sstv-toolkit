@@ -64,7 +64,8 @@ describe('ISS SSTV Decode Test', () => {
 
     // Decode
     const decoder = new SSTVDecoder(48000);
-    const result = await decoder.decodeAudio(blob);
+    const decoded = await decoder.decodeAudio(blob);
+    const result = typeof decoded === 'string' ? decoded : decoded.imageUrl;
 
     expect(result).toBeDefined();
     expect(result).toMatch(/^data:image\/png;base64,/);

@@ -51,7 +51,10 @@ export class SSTVDecoder {
     if (this.useFMDemod) {
       return this.decodeImageWithFM(samples);
     }
-    return this.decodeImage(samples);
+    return this.decodeImage(samples, {
+      sampleRate: this.sampleRate,
+      fileDuration: samples.length / this.sampleRate,
+    });
   }
 
   /**
@@ -202,6 +205,7 @@ export class SSTVDecoder {
         if (Math.abs(startBitFreq - 1900) < 100) {
           // Found start bit! Decode VIS data bits starting after the start bit
           const visCode = this.decodeVIS(samples, startBitPos);
+          this.lastVisCode = visCode;
 
           // VIS ends after: start bit (30ms) + 7 data bits (210ms) + parity (30ms) + stop (30ms) = 300ms
           const visEndPos = startBitPos + Math.floor(0.3 * this.sampleRate);
@@ -255,7 +259,8 @@ export class SSTVDecoder {
     return visCode;
   }
 
-  decodeImage(samples) {
+  decodeImage(samples, audioMeta = {}) {
+    const decodeStart = Date.now();
     const canvas = document.createElement('canvas');
     canvas.width = this.mode.width;
     canvas.height = this.mode.lines;
@@ -425,7 +430,75 @@ export class SSTVDecoder {
 
     ctx.putImageData(imageData, 0, 0);
 
-    return canvas.toDataURL('image/png');
+    const imageUrl = canvas.toDataURL('image/png');
+    const quality = this.analyzeImageQuality(ctx, canvas.width, canvas.height);
+    const decodeTime = Date.now() - decodeStart;
+
+    return {
+      imageUrl,
+      diagnostics: {
+        mode: this.mode.name,
+        visCode: this.lastVisCode,
+        sampleRate: audioMeta.sampleRate || this.sampleRate,
+        fileDuration: audioMeta.fileDuration
+          ? `${audioMeta.fileDuration.toFixed(2)}s`
+          : null,
+        freqOffset: this.freqOffset,
+        autoCalibrate: this.autoCalibrate,
+        visEndPos: this.visEndPos,
+        decodeTimeMs: decodeTime,
+        quality,
+      },
+    };
+  }
+
+  /**
+   * Analyse a decoded canvas to compute basic image quality stats.
+   * Returns average RGB, color balance score, and a quality verdict.
+   */
+  analyzeImageQuality(ctx, width, height) {
+    const imageData = ctx.getImageData(0, 0, width, height);
+    const data = imageData.data;
+    let rSum = 0, gSum = 0, bSum = 0;
+    const pixels = width * height;
+    for (let i = 0; i < data.length; i += 4) {
+      rSum += data[i];
+      gSum += data[i + 1];
+      bSum += data[i + 2];
+    }
+    const rAvg = rSum / pixels;
+    const gAvg = gSum / pixels;
+    const bAvg = bSum / pixels;
+    const brightness = (rAvg + gAvg + bAvg) / 3;
+
+    // Detect common failure modes
+    const greenDominance = gAvg - (rAvg + bAvg) / 2;
+    const colorImbalance = Math.max(rAvg, gAvg, bAvg) - Math.min(rAvg, gAvg, bAvg);
+
+    let verdict = 'good';
+    const warnings = [];
+    if (brightness < 10) {
+      verdict = 'bad';
+      warnings.push('Image is almost entirely black — sync or timing issue');
+    } else if (greenDominance > 40) {
+      verdict = 'bad';
+      warnings.push(`Heavy green tint (G dominates by ${greenDominance.toFixed(0)}) — chroma decode error`);
+    } else if (colorImbalance > 80 && brightness < 40) {
+      verdict = 'warn';
+      warnings.push('Unusual color balance — possible frequency offset');
+    } else if (colorImbalance > 120) {
+      verdict = 'warn';
+      warnings.push('High color imbalance — possible chroma misalignment');
+    }
+
+    return {
+      rAvg: Math.round(rAvg),
+      gAvg: Math.round(gAvg),
+      bAvg: Math.round(bAvg),
+      brightness: Math.round(brightness),
+      verdict,
+      warnings,
+    };
   }
 
   decodeScanLine(samples, startPos, imageData, y, channel) {

@@ -82,7 +82,8 @@ describe('Encoder-Decoder Round-Trip', () => {
     // Decode (with auto-calibration disabled for our own signals)
     console.log('🔊 Decoding...');
     const decoder = new SSTVDecoder(48000, { autoCalibrate: false });
-    const resultDataUrl = await decoder.decodeAudio(audioBlob);
+    const decoded = await decoder.decodeAudio(audioBlob);
+    const resultDataUrl = typeof decoded === 'string' ? decoded : decoded.imageUrl;
 
     expect(resultDataUrl).toBeDefined();
     expect(resultDataUrl).toMatch(/^data:image\/png;base64,/);
@@ -175,7 +176,8 @@ describe('Encoder-Decoder Round-Trip', () => {
     // Decode
     console.log('🔊 Decoding...');
     const decoder = new SSTVDecoder(48000, { autoCalibrate: false });
-    const resultDataUrl = await decoder.decodeAudio(audioBlob);
+    const decoded = await decoder.decodeAudio(audioBlob);
+    const resultDataUrl = typeof decoded === 'string' ? decoded : decoded.imageUrl;
 
     // Decode the PNG
     const base64Data = resultDataUrl.replace(/^data:image\/png;base64,/, '');

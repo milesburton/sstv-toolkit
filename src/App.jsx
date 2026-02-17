@@ -3,6 +3,98 @@ import './App.css';
 import { SSTVDecoder } from './utils/SSTVDecoder';
 import { SSTV_MODES, SSTVEncoder } from './utils/SSTVEncoder';
 
+// Show diagnostics panel when URL contains ?debug or localStorage has sstv_debug=1
+const DEBUG_MODE =
+  typeof window !== 'undefined' &&
+  (window.location.search.includes('debug') ||
+    localStorage.getItem('sstv_debug') === '1');
+
+function QualityBadge({ verdict }) {
+  if (!verdict) return null;
+  const map = {
+    good: { label: 'Good', className: 'quality-good' },
+    warn: { label: 'Warning', className: 'quality-warn' },
+    bad: { label: 'Poor', className: 'quality-bad' },
+  };
+  const { label, className } = map[verdict] || map.good;
+  return <span className={`quality-badge ${className}`}>{label}</span>;
+}
+
+function DiagnosticsPanel({ diagnostics }) {
+  const [open, setOpen] = useState(true);
+  if (!diagnostics) return null;
+  const { mode, visCode, sampleRate, fileDuration, freqOffset, autoCalibrate, visEndPos, decodeTimeMs, quality } = diagnostics;
+
+  return (
+    <div className="diag-panel">
+      <button className="diag-toggle" onClick={() => setOpen(o => !o)}>
+        🔬 Diagnostics {open ? '▲' : '▼'}
+      </button>
+      {open && (
+        <div className="diag-body">
+          <div className="diag-grid">
+            <span className="diag-label">Mode</span>
+            <span className="diag-value">{mode ?? '—'}</span>
+
+            <span className="diag-label">VIS code</span>
+            <span className="diag-value">
+              {visCode != null ? `0x${visCode.toString(16).toUpperCase().padStart(2, '0')} (${visCode})` : '—'}
+            </span>
+
+            <span className="diag-label">Sample rate</span>
+            <span className="diag-value">{sampleRate ? `${sampleRate} Hz` : '—'}</span>
+
+            <span className="diag-label">File duration</span>
+            <span className="diag-value">{fileDuration ?? '—'}</span>
+
+            <span className="diag-label">Freq offset</span>
+            <span className={`diag-value ${Math.abs(freqOffset) > 50 ? 'diag-warn' : ''}`}>
+              {freqOffset != null ? `${freqOffset > 0 ? '+' : ''}${freqOffset} Hz` : '—'}
+            </span>
+
+            <span className="diag-label">Auto-calibrate</span>
+            <span className="diag-value">{autoCalibrate ? 'on' : 'off'}</span>
+
+            <span className="diag-label">VIS end pos</span>
+            <span className="diag-value">{visEndPos != null ? `${visEndPos} samples` : '—'}</span>
+
+            <span className="diag-label">Decode time</span>
+            <span className="diag-value">{decodeTimeMs != null ? `${decodeTimeMs} ms` : '—'}</span>
+          </div>
+
+          {quality && (
+            <>
+              <div className="diag-section-title">Image Quality</div>
+              <div className="diag-grid">
+                <span className="diag-label">Avg R/G/B</span>
+                <span className="diag-value" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <span style={{ color: '#ff6b6b' }}>R:{quality.rAvg}</span>
+                  <span style={{ color: '#51cf66' }}>G:{quality.gAvg}</span>
+                  <span style={{ color: '#74c0fc' }}>B:{quality.bAvg}</span>
+                </span>
+
+                <span className="diag-label">Brightness</span>
+                <span className="diag-value">{quality.brightness}</span>
+
+                <span className="diag-label">Verdict</span>
+                <span className="diag-value"><QualityBadge verdict={quality.verdict} /></span>
+              </div>
+
+              {quality.warnings.length > 0 && (
+                <ul className="diag-warnings">
+                  {quality.warnings.map((w, i) => (
+                    <li key={i}>⚠️ {w}</li>
+                  ))}
+                </ul>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function App() {
   // Encoder state
   const [selectedMode, setSelectedMode] = useState('ROBOT36');
@@ -61,11 +153,21 @@ function App() {
 
       const encoder = new SSTVEncoder(selectedMode);
       const audioBlob = await encoder.encodeImage(file);
+      const mode = SSTV_MODES[selectedMode];
 
       setEncodeResult({
         blob: audioBlob,
         url: URL.createObjectURL(audioBlob),
         filename: `sstv_${selectedMode.toLowerCase()}_${Date.now()}.wav`,
+        diagnostics: {
+          mode: mode.name,
+          width: mode.width,
+          lines: mode.lines,
+          colorFormat: mode.colorFormat,
+          expectedDuration: `${(mode.lines * (mode.syncPulse + mode.syncPorch + (mode.scanTime || 0))).toFixed(1)}s`,
+          sampleRate: 48000,
+          fileSize: `${(audioBlob.size / 1024).toFixed(0)} KB`,
+        },
       });
     } catch (err) {
       setEncodeError(err.message);
@@ -124,11 +226,16 @@ function App() {
       }
 
       const decoder = new SSTVDecoder();
-      const imageDataUrl = await decoder.decodeAudio(file);
+      const result = await decoder.decodeAudio(file);
+
+      // Handle both old (string) and new (object) return shapes
+      const imageUrl = typeof result === 'string' ? result : result.imageUrl;
+      const diagnostics = typeof result === 'object' ? result.diagnostics : null;
 
       setDecodeResult({
-        url: imageDataUrl,
+        url: imageUrl,
         filename: `sstv_decoded_${Date.now()}.png`,
+        diagnostics,
       });
     } catch (err) {
       setDecodeError(err.message);
@@ -242,6 +349,27 @@ function App() {
                   🔄 Encode Another
                 </button>
               </div>
+              {DEBUG_MODE && encodeResult.diagnostics && (
+                <div className="diag-panel">
+                  <div className="diag-toggle-static">🔬 Encode Diagnostics</div>
+                  <div className="diag-body">
+                    <div className="diag-grid">
+                      <span className="diag-label">Mode</span>
+                      <span className="diag-value">{encodeResult.diagnostics.mode}</span>
+                      <span className="diag-label">Resolution</span>
+                      <span className="diag-value">{encodeResult.diagnostics.width}×{encodeResult.diagnostics.lines}</span>
+                      <span className="diag-label">Color format</span>
+                      <span className="diag-value">{encodeResult.diagnostics.colorFormat}</span>
+                      <span className="diag-label">Est. duration</span>
+                      <span className="diag-value">{encodeResult.diagnostics.expectedDuration}</span>
+                      <span className="diag-label">Sample rate</span>
+                      <span className="diag-value">{encodeResult.diagnostics.sampleRate} Hz</span>
+                      <span className="diag-label">File size</span>
+                      <span className="diag-value">{encodeResult.diagnostics.fileSize}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -302,7 +430,16 @@ function App() {
 
           {decodeResult && (
             <div className="result">
-              <h3>✅ Decoded Successfully</h3>
+              <h3>
+                {decodeResult.diagnostics?.quality?.verdict === 'bad'
+                  ? '⚠️ Decoded (quality issues)'
+                  : decodeResult.diagnostics?.quality?.verdict === 'warn'
+                  ? '⚠️ Decoded Successfully'
+                  : '✅ Decoded Successfully'}
+                {decodeResult.diagnostics?.quality && (
+                  <QualityBadge verdict={decodeResult.diagnostics.quality.verdict} />
+                )}
+              </h3>
               <img src={decodeResult.url} alt="Decoded SSTV" />
               <div className="actions">
                 <button onClick={downloadDecode} className="download-btn">
@@ -312,6 +449,7 @@ function App() {
                   🔄 Decode Another
                 </button>
               </div>
+              {DEBUG_MODE && <DiagnosticsPanel diagnostics={decodeResult.diagnostics} />}
             </div>
           )}
         </div>
@@ -357,6 +495,12 @@ function App() {
           <span className="build-info">
             Build {new Date().toISOString().slice(0, 16).replace('T', ' ')}
           </span>
+          {DEBUG_MODE && (
+            <>
+              {' • '}
+              <span className="diag-mode-indicator">🔬 Debug mode</span>
+            </>
+          )}
         </p>
       </footer>
     </div>
