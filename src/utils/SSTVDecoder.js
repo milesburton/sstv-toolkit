@@ -49,33 +49,34 @@ export class SSTVDecoder {
       if (Math.abs(freq - 1200) < 150) {
         // Found a 1200Hz-like tone. Use its measured frequency as the reference for the
         // break boundary scan (handles transmitter frequency offsets up to ±150Hz).
-        // First scan backward to find the actual break start — handles the case where the
-        // 0.5ms outer step lands us mid-break (e.g. 8ms into a 10ms break).
         const breakFreq = freq;
         const checkStep = Math.floor(0.005 * this.sampleRate);
+
+        // Quick leader check: 200ms before the candidate must look like 1900Hz.
+        // This single fast check rejects most false positives in noise before the
+        // expensive break-boundary scan. Parity checking catches anything that slips through.
+        if (i < Math.floor(0.15 * this.sampleRate)) continue; // need at least 150ms before
+        {
+          const expectedLeader = 1900 + (breakFreq - 1200);
+          const checkPos = Math.max(0, i - Math.floor(0.2 * this.sampleRate));
+          const leaderFreq = this.detectFrequency(samples, checkPos, 0.02);
+          if (Math.abs(leaderFreq - expectedLeader) > 200) continue;
+        }
+
+        // Scan backward to find the actual break start (handles mid-break entry).
+        // ISS signals can have very long breaks (180ms+) so scan up to 300ms back.
         let breakStart = i;
-        const maxBreakSamples = Math.floor(0.06 * this.sampleRate);
+        const maxBreakSamples = Math.floor(0.3 * this.sampleRate);
         while (breakStart > 0 && i - breakStart < maxBreakSamples) {
           const prevPos = Math.max(0, breakStart - checkStep);
           if (Math.abs(this.detectFrequency(samples, prevPos, 0.005) - breakFreq) > 80) break;
           breakStart = prevPos;
         }
 
-        // Validate that the leader before this break is ~1900Hz (the VIS preamble).
-        // This rejects false positives where we land in the middle of 1300Hz VIS data bits
-        // (1300Hz is within 150Hz of 1200Hz, causing the outer check to trigger).
-        // The expected leader frequency is 1900Hz + any transmitter offset (breakFreq - 1200).
-        if (breakStart >= checkStep) {
-          const leaderFreq = this.detectFrequency(samples, Math.max(0, breakStart - checkStep), 0.01);
-          const expectedLeader = 1900 + (breakFreq - 1200);
-          // Leader should be ~1900Hz (±200Hz, offset-adjusted); 1300Hz data bits fail this.
-          if (Math.abs(leaderFreq - expectedLeader) > 200) continue;
-        }
-
         let breakEnd = breakStart;
         while (
           breakEnd < samples.length - checkStep &&
-          breakEnd - breakStart < Math.floor(0.06 * this.sampleRate)
+          breakEnd - breakStart < Math.floor(0.3 * this.sampleRate)
         ) {
           const checkFreq = this.detectFrequency(samples, breakEnd, 0.005);
           if (Math.abs(checkFreq - breakFreq) > 80) break;
@@ -100,6 +101,8 @@ export class SSTVDecoder {
         if (firstBitFreq < 1000 + freqShift || firstBitFreq > 1500 + freqShift) continue;
 
         const visCode = this.decodeVIS(samples, dataBitPos, freqShift);
+        // Reject if parity check fails — a strong indicator of a false VIS detection.
+        if (!this.lastVisParityOk) continue;
         this.lastVisCode = visCode;
         this.visFreqShift = freqShift;
 
@@ -141,8 +144,7 @@ export class SSTVDecoder {
             return mode;
           }
         }
-
-        this.visEndPos = visEndPos;
+        // VIS code decoded but doesn't match any known mode — skip without setting visEndPos.
       }
     }
 
@@ -153,12 +155,22 @@ export class SSTVDecoder {
   decodeVIS(samples, startIdx, freqShift = 0) {
     let idx = startIdx;
     let visCode = 0;
+    let ones = 0;
 
     for (let bit = 0; bit < 7; bit++) {
       const freq = this.detectFrequency(samples, idx, 0.03);
-      if (freq < 1200 + freqShift) visCode |= 1 << bit;
+      if (freq < 1200 + freqShift) {
+        visCode |= 1 << bit;
+        ones++;
+      }
       idx += Math.floor(0.03 * this.sampleRate);
     }
+
+    // Check parity bit (bit 7): even parity over the 7 data bits.
+    // A mismatched parity strongly indicates a false VIS detection.
+    const parityFreq = this.detectFrequency(samples, idx, 0.03);
+    const parityBit = parityFreq < 1200 + freqShift ? 1 : 0;
+    this.lastVisParityOk = (ones % 2) === parityBit;
 
     return visCode;
   }
@@ -698,5 +710,4 @@ export class SSTVDecoder {
 
     return Math.sqrt(realPart * realPart + imagPart * imagPart) / N;
   }
-
 }
