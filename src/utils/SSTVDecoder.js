@@ -286,11 +286,11 @@ export class SSTVDecoder {
     // Fall back to searching from near start if VIS position unknown
     const visEnd = this.visEndPos || Math.floor(0.61 * this.sampleRate);
     const searchPositions = [
-      visEnd,                                        // Right after VIS - most accurate
-      visEnd - Math.floor(0.05 * this.sampleRate),  // Slightly before (timing variance)
-      visEnd + Math.floor(0.05 * this.sampleRate),  // Slightly after
-      Math.floor(0.5 * this.sampleRate),             // Fallback
-      0,                                             // Last resort
+      visEnd, // Right after VIS - most accurate
+      visEnd - Math.floor(0.05 * this.sampleRate), // Slightly before (timing variance)
+      visEnd + Math.floor(0.05 * this.sampleRate), // Slightly after
+      Math.floor(0.5 * this.sampleRate), // Fallback
+      0, // Last resort
     ];
 
     let position = -1;
@@ -304,15 +304,6 @@ export class SSTVDecoder {
 
     if (position === -1) {
       throw new Error('Could not find sync pulse. Make sure this is a valid SSTV transmission.');
-    }
-
-    // Pre-calibrate frequency offset BEFORE decoding any lines (if auto-calibration enabled)
-    // This ensures all lines (including the first 10) are decoded with the correct offset
-    if (this.autoCalibrate && this.freqOffset === 0 && this.mode.colorFormat === 'YUV') {
-      this.freqOffset = this.estimateFreqOffset(samples, position);
-      if (this.freqOffset !== 0) {
-        console.log(`🔧 Pre-calibration: detected ${this.freqOffset}Hz offset`);
-      }
     }
 
     // Decode each line (or line pair for PD modes)
@@ -849,7 +840,12 @@ export class SSTVDecoder {
     const PORCH_TIME = 0.0015;
     const CHROMA_SCAN_TIME = 0.044;
     const lineTime =
-      this.mode.syncPulse + this.mode.syncPorch + Y_SCAN_TIME + SEPARATOR_TIME + PORCH_TIME + CHROMA_SCAN_TIME;
+      this.mode.syncPulse +
+      this.mode.syncPorch +
+      Y_SCAN_TIME +
+      SEPARATOR_TIME +
+      PORCH_TIME +
+      CHROMA_SCAN_TIME;
     const lineSamples = Math.floor(lineTime * this.sampleRate);
 
     const measuredPorchFreqs = [];
