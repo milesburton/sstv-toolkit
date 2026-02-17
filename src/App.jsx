@@ -3,11 +3,6 @@ import './App.scss';
 import { SSTVDecoder } from './utils/SSTVDecoder';
 import { SSTV_MODES, SSTVEncoder } from './utils/SSTVEncoder';
 
-// Show diagnostics panel when URL contains ?debug or localStorage has sstv_debug=1
-const DEBUG_MODE =
-  typeof window !== 'undefined' &&
-  (window.location.search.includes('debug') || localStorage.getItem('sstv_debug') === '1');
-
 function QualityBadge({ verdict }) {
   if (!verdict) return null;
   const map = {
@@ -365,7 +360,7 @@ function App() {
                   🔄 Encode Another
                 </button>
               </div>
-              {DEBUG_MODE && encodeResult.diagnostics && (
+              {encodeResult.diagnostics && (
                 <div className="diag-panel">
                   <div className="diag-toggle-static">🔬 Encode Diagnostics</div>
                   <div className="diag-body">
@@ -469,7 +464,7 @@ function App() {
                   🔄 Decode Another
                 </button>
               </div>
-              {DEBUG_MODE && <DiagnosticsPanel diagnostics={decodeResult.diagnostics} />}
+              <DiagnosticsPanel diagnostics={decodeResult.diagnostics} />
             </div>
           )}
         </div>
@@ -513,12 +508,6 @@ function App() {
           <span className="version">v{__APP_VERSION__}</span>
           {' • '}
           <span className="build-info">Build {__BUILD_DATE__}</span>
-          {DEBUG_MODE && (
-            <>
-              {' • '}
-              <span className="diag-mode-indicator">🔬 Debug mode</span>
-            </>
-          )}
         </p>
       </footer>
     </div>
