@@ -145,6 +145,65 @@ describe('Encoder-Decoder Round-Trip', () => {
     console.log(`   ✅ Round-trip test PASSED\n`);
   }, 60000);
 
+  it('should decode correctly with autoCalibrate enabled (browser default)', async () => {
+    const canvas = createCanvas(320, 240);
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = 'rgb(255, 0, 0)';
+    ctx.fillRect(0, 0, 160, 120);
+    ctx.fillStyle = 'rgb(0, 0, 255)';
+    ctx.fillRect(160, 120, 160, 120);
+    ctx.fillStyle = 'rgb(128, 128, 128)';
+    ctx.fillRect(160, 0, 160, 120);
+    ctx.fillRect(0, 120, 160, 120);
+    const imageData = ctx.getImageData(0, 0, 320, 240);
+
+    const encoder = new SSTVEncoder('ROBOT36', 48000);
+    const audioBlob = encoder.generateAudio(imageData);
+
+    const decoder = new SSTVDecoder(48000, { autoCalibrate: true });
+    const decoded = await decoder.decodeAudio(audioBlob);
+    const resultDataUrl = typeof decoded === 'string' ? decoded : decoded.imageUrl;
+
+    const base64Data = resultDataUrl.replace(/^data:image\/png;base64,/, '');
+    const pngBuffer = Buffer.from(base64Data, 'base64');
+    const { Image } = await import('canvas');
+    const img = new Image();
+    await new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = reject;
+      img.src = pngBuffer;
+    });
+
+    const resultCanvas = createCanvas(img.width, img.height);
+    const resultCtx = resultCanvas.getContext('2d');
+    resultCtx.drawImage(img, 0, 0);
+    const resultImageData = resultCtx.getImageData(0, 0, img.width, img.height);
+    const pixels = resultImageData.data;
+
+    const redIdx = (60 * 320 + 80) * 4;
+    const blueIdx = (180 * 320 + 240) * 4;
+
+    const redR = pixels[redIdx];
+    const redG = pixels[redIdx + 1];
+    const redB = pixels[redIdx + 2];
+    const blueR = pixels[blueIdx];
+    const blueG = pixels[blueIdx + 1];
+    const blueB = pixels[blueIdx + 2];
+
+    console.log(`\n📊 autoCalibrate=true Results:`);
+    console.log(`   Red block:  R=${redR}, G=${redG}, B=${redB}`);
+    console.log(`   Blue block: R=${blueR}, G=${blueG}, B=${blueB}`);
+
+    expect(redR).toBeGreaterThan(200);
+    expect(redG).toBeLessThan(50);
+    expect(redB).toBeLessThan(50);
+    expect(blueB).toBeGreaterThan(200);
+    expect(blueR).toBeLessThan(50);
+    expect(blueG).toBeLessThan(50);
+
+    console.log(`   ✅ autoCalibrate=true test PASSED\n`);
+  }, 60000);
+
   it('should encode and decode colored blocks correctly', async () => {
     // Create test image with colored blocks
     const canvas = createCanvas(320, 240);

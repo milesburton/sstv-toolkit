@@ -86,9 +86,11 @@ export class SSTVDecoder {
 
       if (this.mode.colorFormat === 'RGB') {
         position = this.decodeScanLineFromFreqStream(freqStream, position, imageData, y, 1);
-        if (this.mode.separatorPulse) position += Math.floor(this.mode.separatorPulse * this.sampleRate);
+        if (this.mode.separatorPulse)
+          position += Math.floor(this.mode.separatorPulse * this.sampleRate);
         position = this.decodeScanLineFromFreqStream(freqStream, position, imageData, y, 2);
-        if (this.mode.separatorPulse) position += Math.floor(this.mode.separatorPulse * this.sampleRate);
+        if (this.mode.separatorPulse)
+          position += Math.floor(this.mode.separatorPulse * this.sampleRate);
         position = this.decodeScanLineFromFreqStream(freqStream, position, imageData, y, 0);
       } else {
         position = this.decodeYFromFreqStream(freqStream, position, imageData, y);
@@ -100,28 +102,22 @@ export class SSTVDecoder {
 
           if (position < freqStream.length) {
             position = this.decodeChromaFromFreqStream(
-              freqStream, position, chromaU, chromaV, y, isEvenLine ? 'V' : 'U'
+              freqStream,
+              position,
+              chromaU,
+              chromaV,
+              y,
+              isEvenLine ? 'V' : 'U'
             );
           }
         }
       }
 
       if (this.autoCalibrate) {
-        const maxLineDuration = (this.mode.syncPulse + this.mode.syncPorch + this.mode.scanTime * 3) * 2;
-        const searchLimit = position + Math.floor(maxLineDuration * this.sampleRate);
-        const nextSync = this.findSyncPulse(samples, position, searchLimit);
-        if (nextSync !== -1) {
-          position = nextSync;
-        } else {
-          const expectedLinePosition = position + Math.floor(this.mode.scanTime * this.sampleRate * 0.5);
-          if (expectedLinePosition < samples.length) {
-            const expandedSync = this.findSyncPulse(
-              samples, expectedLinePosition,
-              expectedLinePosition + Math.floor(maxLineDuration * this.sampleRate)
-            );
-            position = expandedSync !== -1 ? expandedSync : expectedLinePosition;
-          }
-        }
+        const lineSamples = Math.floor(this.mode.scanTime * this.sampleRate);
+        const tolerance = Math.floor(lineSamples * 0.1);
+        const nextSync = this.findSyncPulse(samples, position - tolerance, position + tolerance);
+        if (nextSync !== -1) position = nextSync;
       }
     }
 
@@ -180,7 +176,13 @@ export class SSTVDecoder {
 
     if (typeof window !== 'undefined') {
       console.log('📡 VIS Frequencies detected:', frequenciesDetected);
-      console.log('📡 VIS Code decoded:', visCode, '(binary:', visCode.toString(2).padStart(7, '0'), ')');
+      console.log(
+        '📡 VIS Code decoded:',
+        visCode,
+        '(binary:',
+        visCode.toString(2).padStart(7, '0'),
+        ')'
+      );
     }
 
     return visCode;
@@ -235,9 +237,9 @@ export class SSTVDecoder {
         position = this.decodeScanLinePD(samples, position, imageData, chromaU, chromaV, y);
 
         if (this.autoCalibrate && y + 2 < this.mode.lines) {
-          const maxLineDuration = (this.mode.syncPulse + this.mode.syncPorch + this.mode.componentTime * 4) * 2;
-          const searchLimit = position + Math.floor(maxLineDuration * this.sampleRate);
-          const nextSync = this.findSyncPulse(samples, position, searchLimit);
+          const lineSamples = Math.floor(this.mode.componentTime * 4 * this.sampleRate);
+          const tolerance = Math.floor(lineSamples * 0.1);
+          const nextSync = this.findSyncPulse(samples, position - tolerance, position + tolerance);
           if (nextSync !== -1) position = nextSync;
         }
       }
@@ -247,9 +249,11 @@ export class SSTVDecoder {
 
         if (this.mode.colorFormat === 'RGB') {
           position = this.decodeScanLine(samples, position, imageData, y, 1);
-          if (this.mode.separatorPulse) position += Math.floor(this.mode.separatorPulse * this.sampleRate);
+          if (this.mode.separatorPulse)
+            position += Math.floor(this.mode.separatorPulse * this.sampleRate);
           position = this.decodeScanLine(samples, position, imageData, y, 2);
-          if (this.mode.separatorPulse) position += Math.floor(this.mode.separatorPulse * this.sampleRate);
+          if (this.mode.separatorPulse)
+            position += Math.floor(this.mode.separatorPulse * this.sampleRate);
           position = this.decodeScanLine(samples, position, imageData, y, 0);
         } else {
           position = this.decodeScanLineYUV(samples, position, imageData, y);
@@ -262,27 +266,27 @@ export class SSTVDecoder {
 
             if (position < samples.length) {
               position = this.decodeScanLineChroma(
-                samples, position, chromaU, chromaV, y, this.currentChromaType
+                samples,
+                position,
+                chromaU,
+                chromaV,
+                y,
+                this.currentChromaType
               );
             }
           }
         }
 
         if (this.autoCalibrate) {
-          const maxLineDuration = (this.mode.syncPulse + this.mode.syncPorch + this.mode.scanTime * 3) * 2;
-          const searchLimit = position + Math.floor(maxLineDuration * this.sampleRate);
-          const nextSync = this.findSyncPulse(samples, position, searchLimit);
+          const lineSamples = Math.floor(this.mode.scanTime * this.sampleRate);
+          const tolerance = Math.floor(lineSamples * 0.1);
+          const nextSync = this.findSyncPulse(
+            samples,
+            position - tolerance,
+            position + tolerance
+          );
           if (nextSync !== -1) {
             position = nextSync;
-          } else {
-            const expectedLinePosition = position + Math.floor(this.mode.scanTime * this.sampleRate * 0.5);
-            if (expectedLinePosition < samples.length) {
-              const expandedSync = this.findSyncPulse(
-                samples, expectedLinePosition,
-                expectedLinePosition + Math.floor(maxLineDuration * this.sampleRate)
-              );
-              position = expandedSync !== -1 ? expandedSync : expectedLinePosition;
-            }
           }
         }
       }
@@ -318,7 +322,9 @@ export class SSTVDecoder {
   analyzeImageQuality(ctx, width, height) {
     const imageData = ctx.getImageData(0, 0, width, height);
     const data = imageData.data;
-    let rSum = 0, gSum = 0, bSum = 0;
+    let rSum = 0,
+      gSum = 0,
+      bSum = 0;
     const pixels = width * height;
 
     for (let i = 0; i < data.length; i += 4) {
@@ -342,7 +348,9 @@ export class SSTVDecoder {
       warnings.push('Image is almost entirely black — sync or timing issue');
     } else if (greenDominance > 40) {
       verdict = 'bad';
-      warnings.push(`Heavy green tint (G dominates by ${greenDominance.toFixed(0)}) — chroma decode error`);
+      warnings.push(
+        `Heavy green tint (G dominates by ${greenDominance.toFixed(0)}) — chroma decode error`
+      );
     } else if (colorImbalance > 80 && brightness < 40) {
       verdict = 'warn';
       warnings.push('Unusual color balance — possible frequency offset');
@@ -435,7 +443,10 @@ export class SSTVDecoder {
       const freq = this.detectFrequencyRange(samples, pos, duration);
       const freqBlack = FREQ_BLACK + this.freqOffset;
       const freqWhite = FREQ_WHITE + this.freqOffset;
-      const value = Math.max(0, Math.min(255, Math.round(((freq - freqBlack) / (freqWhite - freqBlack)) * 255)));
+      const value = Math.max(
+        0,
+        Math.min(255, Math.round(((freq - freqBlack) / (freqWhite - freqBlack)) * 255))
+      );
 
       const pixelIdx = (y * this.mode.width + x) * 4;
       imageData.data[pixelIdx] = value;
@@ -477,14 +488,20 @@ export class SSTVDecoder {
 
       if (x >= 2 && x < halfWidth - 2) {
         freq = [
-          frequencies[x - 2], frequencies[x - 1], frequencies[x],
-          frequencies[x + 1], frequencies[x + 2],
+          frequencies[x - 2],
+          frequencies[x - 1],
+          frequencies[x],
+          frequencies[x + 1],
+          frequencies[x + 2],
         ].sort((a, b) => a - b)[2];
       }
 
       const freqBlack = this.freqOffset ? FREQ_BLACK + this.freqOffset : FREQ_BLACK;
       const freqWhite = this.freqOffset ? FREQ_WHITE + this.freqOffset : FREQ_WHITE;
-      const value = Math.max(0, Math.min(255, Math.round(((freq - freqBlack) / (freqWhite - freqBlack)) * 255)));
+      const value = Math.max(
+        0,
+        Math.min(255, Math.round(((freq - freqBlack) / (freqWhite - freqBlack)) * 255))
+      );
 
       const idx1 = y * this.mode.width + x * 2;
       const idx2 = y * this.mode.width + x * 2 + 1;
@@ -565,7 +582,9 @@ export class SSTVDecoder {
           this.debugUVStats.vSum += V;
           this.debugUVStats.count++;
           if (x === 319) {
-            console.log(`\nFirst line pair avg: U=${(this.debugUVStats.uSum / this.debugUVStats.count).toFixed(1)}, V=${(this.debugUVStats.vSum / this.debugUVStats.count).toFixed(1)}`);
+            console.log(
+              `\nFirst line pair avg: U=${(this.debugUVStats.uSum / this.debugUVStats.count).toFixed(1)}, V=${(this.debugUVStats.vSum / this.debugUVStats.count).toFixed(1)}`
+            );
           }
         }
 
@@ -574,7 +593,10 @@ export class SSTVDecoder {
           const Y = imageData.data[idx];
 
           imageData.data[idx] = Math.max(0, Math.min(255, Math.round(Y + 1.402 * (V - 128))));
-          imageData.data[idx + 1] = Math.max(0, Math.min(255, Math.round(Y - 0.344136 * (U - 128) - 0.714136 * (V - 128))));
+          imageData.data[idx + 1] = Math.max(
+            0,
+            Math.min(255, Math.round(Y - 0.344136 * (U - 128) - 0.714136 * (V - 128)))
+          );
           imageData.data[idx + 2] = Math.max(0, Math.min(255, Math.round(Y + 1.772 * (U - 128))));
         }
       }
@@ -593,15 +615,17 @@ export class SSTVDecoder {
         const BYadj = (chromaU[y * width + x] || 128) - 128;
 
         imageData.data[idx] = Math.max(0, Math.min(255, Math.round(Y + RYadj)));
-        imageData.data[idx + 1] = Math.max(0, Math.min(255, Math.round(Y - 0.194 * BYadj - 0.509 * RYadj)));
+        imageData.data[idx + 1] = Math.max(
+          0,
+          Math.min(255, Math.round(Y - 0.194 * BYadj - 0.509 * RYadj))
+        );
         imageData.data[idx + 2] = Math.max(0, Math.min(255, Math.round(Y + BYadj)));
       }
     }
   }
 
   estimateFreqOffset(samples, firstSyncPos) {
-    const lineTime =
-      this.mode.syncPulse + this.mode.syncPorch + 0.088 + 0.0045 + 0.0015 + 0.044;
+    const lineTime = this.mode.syncPulse + this.mode.syncPorch + 0.088 + 0.0045 + 0.0015 + 0.044;
     const lineSamples = Math.floor(lineTime * this.sampleRate);
 
     const measuredPorchFreqs = [];
@@ -631,7 +655,9 @@ export class SSTVDecoder {
 
     measuredPorchFreqs.sort((a, b) => a - b);
     const medianOffset = measuredPorchFreqs[Math.floor(measuredPorchFreqs.length / 2)];
-    console.log(`📡 Porch measurements: ${measuredPorchFreqs.length} samples, median offset: ${medianOffset}Hz`);
+    console.log(
+      `📡 Porch measurements: ${measuredPorchFreqs.length} samples, median offset: ${medianOffset}Hz`
+    );
 
     return Math.abs(medianOffset) > 50 ? Math.round(medianOffset) : 0;
   }
@@ -648,7 +674,9 @@ export class SSTVDecoder {
         let syncValid = true;
         for (let j = 0; j < 3; j++) {
           const checkPos = i + Math.floor((syncDuration * this.sampleRate * j) / 3);
-          if (Math.abs(this.detectFrequency(samples, checkPos, syncDuration / 3) - FREQ_SYNC) > 200) {
+          if (
+            Math.abs(this.detectFrequency(samples, checkPos, syncDuration / 3) - FREQ_SYNC) > 200
+          ) {
             syncValid = false;
             break;
           }
@@ -666,7 +694,9 @@ export class SSTVDecoder {
 
     if (endIdx - startIdx < 10) return 0;
 
-    const testFreqs = [1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900, 2000, 2100, 2200, 2300];
+    const testFreqs = [
+      1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900, 2000, 2100, 2200, 2300,
+    ];
     let maxMag = 0;
     let detectedFreq = 1500;
 
@@ -715,7 +745,10 @@ export class SSTVDecoder {
   findSyncPulseInFreqStream(freqStream, startPos, endPos = freqStream.length) {
     const syncDuration = Math.max(0.004, this.mode?.syncPulse || 0.005);
     const samplesPerCheck = Math.floor(this.sampleRate * 0.0002);
-    const searchEnd = Math.min(endPos, freqStream.length - Math.floor(syncDuration * this.sampleRate));
+    const searchEnd = Math.min(
+      endPos,
+      freqStream.length - Math.floor(syncDuration * this.sampleRate)
+    );
     const syncFreqNorm = (FREQ_SYNC - FREQ_CENTER) / (FREQ_BANDWIDTH / 2);
 
     let inSync = false;
@@ -743,7 +776,11 @@ export class SSTVDecoder {
       }
     }
 
-    if (inSync && syncStart !== -1 && (searchEnd - syncStart) / this.sampleRate >= syncDuration * 0.7) {
+    if (
+      inSync &&
+      syncStart !== -1 &&
+      (searchEnd - syncStart) / this.sampleRate >= syncDuration * 0.7
+    ) {
       return syncStart;
     }
 
@@ -804,8 +841,9 @@ export class SSTVDecoder {
 
     const filteredChroma = rawChroma.map((v, x) => {
       if (x >= 2 && x < halfWidth - 2) {
-        return [rawChroma[x - 2], rawChroma[x - 1], v, rawChroma[x + 1], rawChroma[x + 2]]
-          .sort((a, b) => a - b)[2];
+        return [rawChroma[x - 2], rawChroma[x - 1], v, rawChroma[x + 1], rawChroma[x + 2]].sort(
+          (a, b) => a - b
+        )[2];
       }
       return v;
     });
