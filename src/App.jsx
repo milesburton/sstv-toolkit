@@ -1,13 +1,12 @@
 import { useState } from 'react';
-import './App.css';
+import './App.scss';
 import { SSTVDecoder } from './utils/SSTVDecoder';
 import { SSTV_MODES, SSTVEncoder } from './utils/SSTVEncoder';
 
 // Show diagnostics panel when URL contains ?debug or localStorage has sstv_debug=1
 const DEBUG_MODE =
   typeof window !== 'undefined' &&
-  (window.location.search.includes('debug') ||
-    localStorage.getItem('sstv_debug') === '1');
+  (window.location.search.includes('debug') || localStorage.getItem('sstv_debug') === '1');
 
 function QualityBadge({ verdict }) {
   if (!verdict) return null;
@@ -23,11 +22,21 @@ function QualityBadge({ verdict }) {
 function DiagnosticsPanel({ diagnostics }) {
   const [open, setOpen] = useState(true);
   if (!diagnostics) return null;
-  const { mode, visCode, sampleRate, fileDuration, freqOffset, autoCalibrate, visEndPos, decodeTimeMs, quality } = diagnostics;
+  const {
+    mode,
+    visCode,
+    sampleRate,
+    fileDuration,
+    freqOffset,
+    autoCalibrate,
+    visEndPos,
+    decodeTimeMs,
+    quality,
+  } = diagnostics;
 
   return (
     <div className="diag-panel">
-      <button className="diag-toggle" onClick={() => setOpen(o => !o)}>
+      <button className="diag-toggle" onClick={() => setOpen((o) => !o)}>
         🔬 Diagnostics {open ? '▲' : '▼'}
       </button>
       {open && (
@@ -38,7 +47,9 @@ function DiagnosticsPanel({ diagnostics }) {
 
             <span className="diag-label">VIS code</span>
             <span className="diag-value">
-              {visCode != null ? `0x${visCode.toString(16).toUpperCase().padStart(2, '0')} (${visCode})` : '—'}
+              {visCode != null
+                ? `0x${visCode.toString(16).toUpperCase().padStart(2, '0')} (${visCode})`
+                : '—'}
             </span>
 
             <span className="diag-label">Sample rate</span>
@@ -67,7 +78,10 @@ function DiagnosticsPanel({ diagnostics }) {
               <div className="diag-section-title">Image Quality</div>
               <div className="diag-grid">
                 <span className="diag-label">Avg R/G/B</span>
-                <span className="diag-value" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <span
+                  className="diag-value"
+                  style={{ display: 'flex', gap: '8px', alignItems: 'center' }}
+                >
                   <span style={{ color: '#ff6b6b' }}>R:{quality.rAvg}</span>
                   <span style={{ color: '#51cf66' }}>G:{quality.gAvg}</span>
                   <span style={{ color: '#74c0fc' }}>B:{quality.bAvg}</span>
@@ -77,7 +91,9 @@ function DiagnosticsPanel({ diagnostics }) {
                 <span className="diag-value">{quality.brightness}</span>
 
                 <span className="diag-label">Verdict</span>
-                <span className="diag-value"><QualityBadge verdict={quality.verdict} /></span>
+                <span className="diag-value">
+                  <QualityBadge verdict={quality.verdict} />
+                </span>
               </div>
 
               {quality.warnings.length > 0 && (
@@ -357,11 +373,15 @@ function App() {
                       <span className="diag-label">Mode</span>
                       <span className="diag-value">{encodeResult.diagnostics.mode}</span>
                       <span className="diag-label">Resolution</span>
-                      <span className="diag-value">{encodeResult.diagnostics.width}×{encodeResult.diagnostics.lines}</span>
+                      <span className="diag-value">
+                        {encodeResult.diagnostics.width}×{encodeResult.diagnostics.lines}
+                      </span>
                       <span className="diag-label">Color format</span>
                       <span className="diag-value">{encodeResult.diagnostics.colorFormat}</span>
                       <span className="diag-label">Est. duration</span>
-                      <span className="diag-value">{encodeResult.diagnostics.expectedDuration}</span>
+                      <span className="diag-value">
+                        {encodeResult.diagnostics.expectedDuration}
+                      </span>
                       <span className="diag-label">Sample rate</span>
                       <span className="diag-value">{encodeResult.diagnostics.sampleRate} Hz</span>
                       <span className="diag-label">File size</span>
@@ -434,8 +454,8 @@ function App() {
                 {decodeResult.diagnostics?.quality?.verdict === 'bad'
                   ? '⚠️ Decoded (quality issues)'
                   : decodeResult.diagnostics?.quality?.verdict === 'warn'
-                  ? '⚠️ Decoded Successfully'
-                  : '✅ Decoded Successfully'}
+                    ? '⚠️ Decoded Successfully'
+                    : '✅ Decoded Successfully'}
                 {decodeResult.diagnostics?.quality && (
                   <QualityBadge verdict={decodeResult.diagnostics.quality.verdict} />
                 )}

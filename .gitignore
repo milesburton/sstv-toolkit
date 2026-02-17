@@ -30,6 +30,10 @@ test-results/
 # Test outputs
 test-output-*.png
 decoded-*.png
-test-pattern.png
 check-samplerate.html
 debug-test.html
+debug-encode-decode.html
+
+# Generated audio/assets
+public/test-colorbars.wav
+*.backup

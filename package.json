@@ -1,7 +1,7 @@
 {
   "name": "sstv-toolkit",
   "private": true,
-  "version": "1.2.8",
+  "version": "1.2.9",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -47,6 +47,7 @@
     "globals": "^16.5.0",
     "happy-dom": "^20.4.0",
     "husky": "^9.1.7",
+    "sass": "^1.97.3",
     "vite": "^7.2.4",
     "vitest": "^4.0.18"
   }
