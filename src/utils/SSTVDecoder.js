@@ -1,11 +1,8 @@
-import { FMDemodulator } from './FMDemodulator.js';
 import { SSTV_MODES } from './SSTVEncoder.js';
 
 const FREQ_SYNC = 1200;
 const FREQ_BLACK = 1500;
 const FREQ_WHITE = 2300;
-const FREQ_CENTER = 1900;
-const FREQ_BANDWIDTH = 800;
 
 export class SSTVDecoder {
   constructor(sampleRate = 48000, options = {}) {
@@ -13,7 +10,6 @@ export class SSTVDecoder {
     this.mode = null;
     this.freqOffset = options.freqOffset || 0;
     this.autoCalibrate = options.autoCalibrate !== false;
-    this.useFMDemod = options.useFMDemod === true;
   }
 
   async decodeAudio(audioFile) {
@@ -37,152 +33,131 @@ export class SSTVDecoder {
       console.log('📡 SSTV Mode detected:', this.mode.name);
     }
 
-    if (this.useFMDemod) {
-      return this.decodeImageWithFM(samples);
-    }
     return this.decodeImage(samples, {
       sampleRate: this.sampleRate,
       fileDuration: samples.length / this.sampleRate,
     });
   }
 
-  decodeImageWithFM(samples) {
-    const fmDemod = new FMDemodulator(FREQ_CENTER, FREQ_BANDWIDTH, this.sampleRate);
-    const demodulated = fmDemod.demodulateAll(samples);
-    return this.decodeImageFromFrequencyStream(demodulated, samples);
-  }
-
-  decodeImageFromFrequencyStream(freqStream, samples) {
-    const canvas = document.createElement('canvas');
-    canvas.width = this.mode.width;
-    canvas.height = this.mode.lines;
-
-    const ctx = canvas.getContext('2d');
-    const imageData = ctx.createImageData(canvas.width, canvas.height);
-
-    for (let i = 0; i < imageData.data.length; i += 4) {
-      imageData.data[i] = 0;
-      imageData.data[i + 1] = 0;
-      imageData.data[i + 2] = 0;
-      imageData.data[i + 3] = 255;
-    }
-
-    let chromaU = null;
-    let chromaV = null;
-    if (this.mode.colorFormat === 'YUV') {
-      chromaU = new Array(this.mode.width * this.mode.lines).fill(128);
-      chromaV = new Array(this.mode.width * this.mode.lines).fill(128);
-    }
-
-    const visEnd = this.visEndPos || Math.floor(0.61 * this.sampleRate);
-    let position = this.findSyncPulse(samples, visEnd);
-
-    if (position === -1) {
-      throw new Error('Could not find sync pulse. Make sure this is a valid SSTV transmission.');
-    }
-
-    for (let y = 0; y < this.mode.lines && position < freqStream.length; y++) {
-      position += Math.floor((this.mode.syncPulse + this.mode.syncPorch) * this.sampleRate);
-
-      if (this.mode.colorFormat === 'RGB') {
-        position = this.decodeScanLineFromFreqStream(freqStream, position, imageData, y, 1);
-        if (this.mode.separatorPulse)
-          position += Math.floor(this.mode.separatorPulse * this.sampleRate);
-        position = this.decodeScanLineFromFreqStream(freqStream, position, imageData, y, 2);
-        if (this.mode.separatorPulse)
-          position += Math.floor(this.mode.separatorPulse * this.sampleRate);
-        position = this.decodeScanLineFromFreqStream(freqStream, position, imageData, y, 0);
-      } else {
-        position = this.decodeYFromFreqStream(freqStream, position, imageData, y);
-
-        if (position < freqStream.length) {
-          const isEvenLine = y % 2 === 0;
-          position += Math.floor(0.0045 * this.sampleRate);
-          position += Math.floor(0.0015 * this.sampleRate);
-
-          if (position < freqStream.length) {
-            position = this.decodeChromaFromFreqStream(
-              freqStream,
-              position,
-              chromaU,
-              chromaV,
-              y,
-              isEvenLine ? 'V' : 'U'
-            );
-          }
-        }
-      }
-
-      if (this.autoCalibrate) {
-        const lineSamples = Math.floor(this.mode.scanTime * this.sampleRate);
-        const tolerance = Math.floor(lineSamples * 0.1);
-        const nextSync = this.findSyncPulse(samples, position - tolerance, position + tolerance);
-        if (nextSync !== -1) position = nextSync;
-      }
-    }
-
-    if (this.mode.colorFormat === 'YUV') {
-      this.convertYUVtoRGB(imageData, chromaU, chromaV);
-    }
-
-    ctx.putImageData(imageData, 0, 0);
-    return canvas.toDataURL('image/png');
-  }
-
   detectMode(samples) {
-    const searchSamples = Math.min(samples.length, this.sampleRate * 2);
     const step = Math.floor(this.sampleRate * 0.0005);
+    const searchLimit = Math.min(samples.length, this.sampleRate * 60);
 
-    for (let i = 0; i < searchSamples - 1000; i += step) {
+    for (let i = 0; i < searchLimit - 1000; i += step) {
       const freq = this.detectFrequency(samples, i, 0.01);
 
-      if (Math.abs(freq - 1200) < 100) {
-        const startBitPos = i + Math.floor(0.01 * this.sampleRate);
-        if (startBitPos + Math.floor(0.03 * this.sampleRate) >= samples.length) continue;
+      if (Math.abs(freq - 1200) < 150) {
+        // Found a 1200Hz-like tone. Use its measured frequency as the reference for the
+        // break boundary scan (handles transmitter frequency offsets up to ±150Hz).
+        // First scan backward to find the actual break start — handles the case where the
+        // 0.5ms outer step lands us mid-break (e.g. 8ms into a 10ms break).
+        const breakFreq = freq;
+        const checkStep = Math.floor(0.005 * this.sampleRate);
+        let breakStart = i;
+        const maxBreakSamples = Math.floor(0.06 * this.sampleRate);
+        while (breakStart > 0 && i - breakStart < maxBreakSamples) {
+          const prevPos = Math.max(0, breakStart - checkStep);
+          if (Math.abs(this.detectFrequency(samples, prevPos, 0.005) - breakFreq) > 80) break;
+          breakStart = prevPos;
+        }
 
-        const startBitFreq = this.detectFrequency(samples, startBitPos, 0.03);
-        if (Math.abs(startBitFreq - 1900) < 100) {
-          const visCode = this.decodeVIS(samples, startBitPos);
-          this.lastVisCode = visCode;
+        // Validate that the leader before this break is ~1900Hz (the VIS preamble).
+        // This rejects false positives where we land in the middle of 1300Hz VIS data bits
+        // (1300Hz is within 150Hz of 1200Hz, causing the outer check to trigger).
+        // The expected leader frequency is 1900Hz + any transmitter offset (breakFreq - 1200).
+        if (breakStart >= checkStep) {
+          const leaderFreq = this.detectFrequency(samples, Math.max(0, breakStart - checkStep), 0.01);
+          const expectedLeader = 1900 + (breakFreq - 1200);
+          // Leader should be ~1900Hz (±200Hz, offset-adjusted); 1300Hz data bits fail this.
+          if (Math.abs(leaderFreq - expectedLeader) > 200) continue;
+        }
 
-          const visEndPos = startBitPos + Math.floor(0.3 * this.sampleRate);
+        let breakEnd = breakStart;
+        while (
+          breakEnd < samples.length - checkStep &&
+          breakEnd - breakStart < Math.floor(0.06 * this.sampleRate)
+        ) {
+          const checkFreq = this.detectFrequency(samples, breakEnd, 0.005);
+          if (Math.abs(checkFreq - breakFreq) > 80) break;
+          breakEnd += checkStep;
+        }
+        const breakDuration = (breakEnd - breakStart) / this.sampleRate;
+        if (breakDuration < 0.005) continue;
 
-          for (const [_key, mode] of Object.entries(SSTV_MODES)) {
-            if (mode.visCode === visCode) {
-              this.visEndPos = visEndPos;
-              return mode;
+        // After the break, expect either a 30ms 1900Hz start bit or immediate VIS data bits.
+        // Check what follows — if it's 1900Hz (or offset-shifted equivalent), treat it as
+        // the start bit and advance.
+        const freqShift = breakFreq - 1200;
+        let dataBitPos = breakEnd;
+        const afterBreakFreq = this.detectFrequency(samples, dataBitPos, 0.03);
+        if (Math.abs(afterBreakFreq - (1900 + freqShift)) < 150) {
+          dataBitPos += Math.floor(0.03 * this.sampleRate);
+        }
+
+        // Validate: the next 30ms must look like a VIS data bit (1100 or 1300Hz + freqShift).
+        const firstBitFreq = this.detectFrequency(samples, dataBitPos, 0.03);
+        if (Math.abs(firstBitFreq - (1900 + freqShift)) < 150) continue;
+        if (firstBitFreq < 1000 + freqShift || firstBitFreq > 1500 + freqShift) continue;
+
+        const visCode = this.decodeVIS(samples, dataBitPos, freqShift);
+        this.lastVisCode = visCode;
+        this.visFreqShift = freqShift;
+
+        // 7 data bits + 1 parity + 1 stop = 9 bits × 30ms each
+        let visEndPos = dataBitPos + 9 * Math.floor(0.03 * this.sampleRate);
+
+        // Refine: scan near visEndPos to find where the stop bit actually ends
+        // (the first image sync also starts with 1200Hz so they merge; look for the
+        // porch transition to 1500Hz which marks the true end of the sync).
+        // Search for porch (1500Hz) within ±60ms of visEndPos to get an accurate visEndPos.
+        {
+          const porchFreq = FREQ_BLACK + freqShift; // 1500Hz + offset
+          const searchStep = Math.floor(0.002 * this.sampleRate); // 2ms steps
+          const searchWindow = Math.floor(0.06 * this.sampleRate); // ±60ms
+          let porchFound = -1;
+          for (
+            let p = Math.max(0, visEndPos - searchWindow);
+            p < Math.min(samples.length, visEndPos + searchWindow);
+            p += searchStep
+          ) {
+            const f = this.detectFrequency(samples, p, 0.003);
+            if (Math.abs(f - porchFreq) < 100) {
+              porchFound = p;
+              break;
             }
           }
-
-          this.visEndPos = visEndPos;
+          if (porchFound !== -1) {
+            // Porch is at porchFound; sync precedes it by syncPulse duration.
+            // visEndPos = sync start (= porchFound - syncPulse_samples).
+            // But we don't know syncPulse yet (mode not returned yet); use 9ms default.
+            const syncSamples = Math.floor(0.009 * this.sampleRate);
+            visEndPos = Math.max(visEndPos - searchWindow, porchFound - syncSamples);
+          }
         }
+
+        for (const [_key, mode] of Object.entries(SSTV_MODES)) {
+          if (mode.visCode === visCode) {
+            this.visEndPos = visEndPos;
+            return mode;
+          }
+        }
+
+        this.visEndPos = visEndPos;
       }
     }
 
+    this.visFreqShift = 0;
     return SSTV_MODES.ROBOT36;
   }
 
-  decodeVIS(samples, startIdx) {
-    let idx = startIdx + Math.floor(0.03 * this.sampleRate);
+  decodeVIS(samples, startIdx, freqShift = 0) {
+    let idx = startIdx;
     let visCode = 0;
-    const frequenciesDetected = [];
 
     for (let bit = 0; bit < 7; bit++) {
       const freq = this.detectFrequency(samples, idx, 0.03);
-      frequenciesDetected.push(freq);
-      if (freq < 1200) visCode |= 1 << bit;
+      if (freq < 1200 + freqShift) visCode |= 1 << bit;
       idx += Math.floor(0.03 * this.sampleRate);
-    }
-
-    if (typeof window !== 'undefined') {
-      console.log('📡 VIS Frequencies detected:', frequenciesDetected);
-      console.log(
-        '📡 VIS Code decoded:',
-        visCode,
-        '(binary:',
-        visCode.toString(2).padStart(7, '0'),
-        ')'
-      );
     }
 
     return visCode;
@@ -212,23 +187,33 @@ export class SSTVDecoder {
     }
 
     const visEnd = this.visEndPos || Math.floor(0.61 * this.sampleRate);
-    const searchPositions = [
-      visEnd,
-      visEnd - Math.floor(0.05 * this.sampleRate),
-      visEnd + Math.floor(0.05 * this.sampleRate),
-      Math.floor(0.5 * this.sampleRate),
-      0,
-    ];
+    // Search for the first image sync pulse within one line-duration forward of visEnd.
+    // We search FORWARD only to avoid false positives from VIS tones (stop bit, data bits)
+    // which all precede visEnd and can look like 1200Hz sync pulses.
+    const lineSamplesInit = Math.floor((this.mode.scanTime || 0.15) * this.sampleRate);
+    let position = this.findSyncPulse(samples, visEnd, visEnd + lineSamplesInit);
 
-    let position = -1;
-    for (const startPos of searchPositions) {
-      if (startPos < 0) continue;
-      position = this.findSyncPulse(samples, startPos);
-      if (position !== -1) break;
+    if (position === -1) {
+      // visEndPos may be slightly past the real sync start (Goertzel window straddling boundary).
+      // Try a broader forward search with a generous window.
+      position = this.findSyncPulse(samples, visEnd, visEnd + lineSamplesInit * 3);
+    }
+
+    if (position === -1) {
+      // Last resort: scan from the beginning of the audio
+      position = this.findSyncPulse(samples, 0);
     }
 
     if (position === -1) {
       throw new Error('Could not find sync pulse. Make sure this is a valid SSTV transmission.');
+    }
+
+    if (this.autoCalibrate) {
+      // Seed with the rough offset detected from the VIS break frequency,
+      // then refine using sync pulses from the actual image data.
+      this.freqOffset = this.visFreqShift || 0;
+      const refined = this.estimateFreqOffset(samples, position);
+      if (refined !== 0) this.freqOffset = refined;
     }
 
     if (this.mode.colorFormat === 'PD') {
@@ -572,18 +557,6 @@ export class SSTVDecoder {
         const V = chromaV[evenLine * this.mode.width + x] || 128;
         const U = chromaU[oddLine * this.mode.width + x] || 128;
 
-        if (y === 0 && x < 320) {
-          if (!this.debugUVStats) this.debugUVStats = { uSum: 0, vSum: 0, count: 0 };
-          this.debugUVStats.uSum += U;
-          this.debugUVStats.vSum += V;
-          this.debugUVStats.count++;
-          if (x === 319) {
-            console.log(
-              `\nFirst line pair avg: U=${(this.debugUVStats.uSum / this.debugUVStats.count).toFixed(1)}, V=${(this.debugUVStats.vSum / this.debugUVStats.count).toFixed(1)}`
-            );
-          }
-        }
-
         for (let ly = evenLine; ly <= oddLine && ly < this.mode.lines; ly++) {
           const idx = (ly * this.mode.width + x) * 4;
           const Y = imageData.data[idx];
@@ -623,37 +596,24 @@ export class SSTVDecoder {
   estimateFreqOffset(samples, firstSyncPos) {
     const lineTime = this.mode.syncPulse + this.mode.syncPorch + 0.088 + 0.0045 + 0.0015 + 0.044;
     const lineSamples = Math.floor(lineTime * this.sampleRate);
+    const tolerance = Math.floor(lineSamples * 0.05);
 
-    const measuredPorchFreqs = [];
+    const offsets = [];
     let pos = firstSyncPos;
 
     for (let line = 0; line < 20; line++) {
-      const porchStart = pos + Math.floor(this.mode.syncPulse * this.sampleRate);
-      const porchEnd = porchStart + Math.floor(this.mode.syncPorch * this.sampleRate);
+      const syncPos = this.findSyncPulse(samples, pos - tolerance, pos + tolerance);
+      if (syncPos === -1) break;
 
-      if (porchEnd >= samples.length) break;
-
-      let maxMag = 0;
-      let bestFreq = 1500;
-      for (let f = 1200; f <= 1800; f += 5) {
-        const mag = this.goertzel(samples, porchStart, porchEnd, f);
-        if (mag > maxMag) {
-          maxMag = mag;
-          bestFreq = f;
-        }
-      }
-
-      if (maxMag > 0.01) measuredPorchFreqs.push(bestFreq - FREQ_BLACK);
-      pos += lineSamples;
+      const measuredFreq = this.detectFrequency(samples, syncPos, this.mode.syncPulse);
+      offsets.push(measuredFreq - FREQ_SYNC);
+      pos = syncPos + lineSamples;
     }
 
-    if (measuredPorchFreqs.length < 5) return 0;
+    if (offsets.length < 5) return 0;
 
-    measuredPorchFreqs.sort((a, b) => a - b);
-    const medianOffset = measuredPorchFreqs[Math.floor(measuredPorchFreqs.length / 2)];
-    console.log(
-      `📡 Porch measurements: ${measuredPorchFreqs.length} samples, median offset: ${medianOffset}Hz`
-    );
+    offsets.sort((a, b) => a - b);
+    const medianOffset = offsets[Math.floor(offsets.length / 2)];
 
     return Math.abs(medianOffset) > 50 ? Math.round(medianOffset) : 0;
   }
@@ -662,16 +622,17 @@ export class SSTVDecoder {
     const syncDuration = Math.max(0.004, this.mode?.syncPulse || 0.005);
     const samplesPerCheck = Math.floor(this.sampleRate * 0.0002);
     const searchEnd = Math.min(endPos, samples.length - Math.floor(syncDuration * this.sampleRate));
+    const expectedSync = FREQ_SYNC + (this.visFreqShift || 0);
 
     for (let i = startPos; i < searchEnd; i += samplesPerCheck) {
       const freq = this.detectFrequency(samples, i, syncDuration);
 
-      if (Math.abs(freq - FREQ_SYNC) < 200) {
+      if (Math.abs(freq - expectedSync) < 200) {
         let syncValid = true;
         for (let j = 0; j < 3; j++) {
           const checkPos = i + Math.floor((syncDuration * this.sampleRate * j) / 3);
           if (
-            Math.abs(this.detectFrequency(samples, checkPos, syncDuration / 3) - FREQ_SYNC) > 200
+            Math.abs(this.detectFrequency(samples, checkPos, syncDuration / 3) - expectedSync) > 200
           ) {
             syncValid = false;
             break;
@@ -738,166 +699,4 @@ export class SSTVDecoder {
     return Math.sqrt(realPart * realPart + imagPart * imagPart) / N;
   }
 
-  findSyncPulseInFreqStream(freqStream, startPos, endPos = freqStream.length) {
-    const syncDuration = Math.max(0.004, this.mode?.syncPulse || 0.005);
-    const samplesPerCheck = Math.floor(this.sampleRate * 0.0002);
-    const searchEnd = Math.min(
-      endPos,
-      freqStream.length - Math.floor(syncDuration * this.sampleRate)
-    );
-    const syncFreqNorm = (FREQ_SYNC - FREQ_CENTER) / (FREQ_BANDWIDTH / 2);
-
-    let inSync = false;
-    let syncStart = -1;
-
-    for (let i = startPos; i < searchEnd; i += samplesPerCheck) {
-      let avgFreq = 0;
-      const numSamples = Math.floor(syncDuration * this.sampleRate);
-      for (let j = 0; j < numSamples && i + j < freqStream.length; j++) {
-        avgFreq += freqStream[i + j];
-      }
-      avgFreq /= numSamples;
-
-      const deviation = Math.abs(avgFreq - syncFreqNorm);
-
-      if (!inSync && deviation < 0.5) {
-        inSync = true;
-        syncStart = i;
-      } else if (inSync && deviation > 0.7) {
-        if ((i - syncStart) / this.sampleRate >= syncDuration * 0.7) return syncStart;
-        inSync = false;
-        syncStart = -1;
-      } else if (inSync && (i - syncStart) / this.sampleRate >= syncDuration) {
-        return syncStart;
-      }
-    }
-
-    if (
-      inSync &&
-      syncStart !== -1 &&
-      (searchEnd - syncStart) / this.sampleRate >= syncDuration * 0.7
-    ) {
-      return syncStart;
-    }
-
-    return -1;
-  }
-
-  decodeYFromFreqStream(freqStream, startPos, imageData, y) {
-    const Y_SCAN_TIME = 0.088;
-    const samplesPerPixel = Math.floor((Y_SCAN_TIME * this.sampleRate) / this.mode.width);
-
-    for (let x = 0; x < this.mode.width; x++) {
-      const pos = startPos + x * samplesPerPixel;
-      if (pos >= freqStream.length) break;
-
-      let avgFreq = 0;
-      const sampleCount = Math.min(samplesPerPixel, freqStream.length - pos);
-      for (let i = 0; i < sampleCount; i++) avgFreq += freqStream[pos + i];
-      avgFreq /= sampleCount;
-
-      const freq = FREQ_CENTER + avgFreq * (FREQ_BANDWIDTH / 2);
-      let value = ((freq - FREQ_BLACK) / (FREQ_WHITE - FREQ_BLACK)) * 255;
-      value = Math.max(0, Math.min(255, Math.round(value)));
-
-      const pixelIdx = (y * this.mode.width + x) * 4;
-      imageData.data[pixelIdx] = value;
-      imageData.data[pixelIdx + 1] = value;
-      imageData.data[pixelIdx + 2] = value;
-      imageData.data[pixelIdx + 3] = 255;
-    }
-
-    return startPos + Math.floor(Y_SCAN_TIME * this.sampleRate);
-  }
-
-  decodeChromaFromFreqStream(freqStream, startPos, chromaU, chromaV, y, componentType) {
-    const CHROMA_SCAN_TIME = 0.044;
-    const halfWidth = Math.floor(this.mode.width / 2);
-    const samplesPerPixel = Math.floor((CHROMA_SCAN_TIME * this.sampleRate) / halfWidth);
-
-    const rawChroma = [];
-    for (let x = 0; x < halfWidth; x++) {
-      const pos = startPos + x * samplesPerPixel;
-      if (pos >= freqStream.length) {
-        rawChroma.push(rawChroma[rawChroma.length - 1] || 128);
-        continue;
-      }
-
-      let avgFreq = 0;
-      const sampleCount = Math.min(samplesPerPixel, freqStream.length - pos);
-      for (let i = 0; i < sampleCount; i++) avgFreq += freqStream[pos + i];
-      avgFreq /= sampleCount;
-
-      const freq = FREQ_CENTER + avgFreq * (FREQ_BANDWIDTH / 2);
-      const freqBlack = this.freqOffset ? FREQ_BLACK + this.freqOffset : FREQ_BLACK;
-      const freqWhite = this.freqOffset ? FREQ_WHITE + this.freqOffset : FREQ_WHITE;
-      const value = ((freq - freqBlack) / (freqWhite - freqBlack)) * 255;
-      rawChroma.push(Math.max(0, Math.min(255, Math.round(value))));
-    }
-
-    const filteredChroma = rawChroma.map((v, x) => {
-      if (x >= 2 && x < halfWidth - 2) {
-        return [rawChroma[x - 2], rawChroma[x - 1], v, rawChroma[x + 1], rawChroma[x + 2]].sort(
-          (a, b) => a - b
-        )[2];
-      }
-      return v;
-    });
-
-    for (let x = 0; x < halfWidth; x++) {
-      const chromaValue = filteredChroma[x];
-      const idx1 = y * this.mode.width + x * 2;
-      const idx2 = y * this.mode.width + x * 2 + 1;
-
-      if (componentType === 'U') {
-        chromaU[idx1] = chromaValue;
-        if (idx2 < this.mode.width * this.mode.lines) chromaU[idx2] = chromaValue;
-      } else if (componentType === 'V') {
-        chromaV[idx1] = chromaValue;
-        if (idx2 < this.mode.width * this.mode.lines) chromaV[idx2] = chromaValue;
-      }
-    }
-
-    return startPos + Math.floor(CHROMA_SCAN_TIME * this.sampleRate);
-  }
-
-  decodeScanLineFromFreqStream(freqStream, startPos, imageData, y, channel) {
-    const samplesPerPixel = Math.floor((this.mode.scanTime * this.sampleRate) / this.mode.width);
-
-    for (let x = 0; x < this.mode.width; x++) {
-      const pos = startPos + x * samplesPerPixel;
-      if (pos >= freqStream.length) break;
-
-      let avgFreq = 0;
-      const sampleCount = Math.min(samplesPerPixel, freqStream.length - pos);
-      for (let i = 0; i < sampleCount; i++) avgFreq += freqStream[pos + i];
-      avgFreq /= sampleCount;
-
-      const freq = FREQ_CENTER + avgFreq * (FREQ_BANDWIDTH / 2);
-      let value = ((freq - FREQ_BLACK) / (FREQ_WHITE - FREQ_BLACK)) * 255;
-      value = Math.max(0, Math.min(255, Math.round(value)));
-
-      const idx = (y * this.mode.width + x) * 4;
-      imageData.data[idx + channel] = value;
-      imageData.data[idx + 3] = 255;
-    }
-
-    return startPos + Math.floor(this.mode.scanTime * this.sampleRate);
-  }
-
-  async decodeWithMode(audioFile, modeName) {
-    this.mode = SSTV_MODES[modeName];
-
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)({
-      sampleRate: 48000,
-    });
-    const arrayBuffer = await audioFile.arrayBuffer();
-    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-
-    const samples = audioBuffer.getChannelData(0);
-    this.sampleRate = audioBuffer.sampleRate;
-
-    if (this.useFMDemod) return this.decodeImageWithFM(samples);
-    return this.decodeImage(samples);
-  }
 }
