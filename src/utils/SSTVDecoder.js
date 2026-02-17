@@ -98,7 +98,8 @@ export class SSTVDecoder {
     }
 
     // Find first sync pulse using original samples (sync at 1200 Hz is outside FM demod bandwidth)
-    let position = this.findSyncPulse(samples, Math.floor(0.6 * this.sampleRate));
+    const visEnd = this.visEndPos || Math.floor(0.61 * this.sampleRate);
+    let position = this.findSyncPulse(samples, visEnd);
 
     if (position === -1) {
       throw new Error('Could not find sync pulse. Make sure this is a valid SSTV transmission.');
@@ -202,12 +203,19 @@ export class SSTVDecoder {
           // Found start bit! Decode VIS data bits starting after the start bit
           const visCode = this.decodeVIS(samples, startBitPos);
 
+          // VIS ends after: start bit (30ms) + 7 data bits (210ms) + parity (30ms) + stop (30ms) = 300ms
+          const visEndPos = startBitPos + Math.floor(0.3 * this.sampleRate);
+
           // Find matching mode
           for (const [_key, mode] of Object.entries(SSTV_MODES)) {
             if (mode.visCode === visCode) {
+              this.visEndPos = visEndPos;
               return mode;
             }
           }
+
+          // Unknown VIS code but we found a valid VIS sequence - store position and default
+          this.visEndPos = visEndPos;
         }
       }
     }
@@ -273,17 +281,21 @@ export class SSTVDecoder {
       chromaV = new Array(this.mode.width * this.mode.lines).fill(128);
     }
 
-    // Find first sync pulse to align - search from multiple positions
-    // Try starting from several positions to find the first real line sync
+    // Find first sync pulse starting from where VIS ended
+    // this.visEndPos is set by detectMode() to the exact position after VIS stop bit
+    // Fall back to searching from near start if VIS position unknown
+    const visEnd = this.visEndPos || Math.floor(0.61 * this.sampleRate);
     const searchPositions = [
-      Math.floor(0.61 * this.sampleRate), // Standard VIS duration
-      Math.floor(0.5 * this.sampleRate), // Earlier position
-      Math.floor(0.8 * this.sampleRate), // Later position
-      0, // From beginning if all else fails
+      visEnd,                                        // Right after VIS - most accurate
+      visEnd - Math.floor(0.05 * this.sampleRate),  // Slightly before (timing variance)
+      visEnd + Math.floor(0.05 * this.sampleRate),  // Slightly after
+      Math.floor(0.5 * this.sampleRate),             // Fallback
+      0,                                             // Last resort
     ];
 
     let position = -1;
     for (const startPos of searchPositions) {
+      if (startPos < 0) continue;
       position = this.findSyncPulse(samples, startPos);
       if (position !== -1) {
         break;
@@ -292,6 +304,15 @@ export class SSTVDecoder {
 
     if (position === -1) {
       throw new Error('Could not find sync pulse. Make sure this is a valid SSTV transmission.');
+    }
+
+    // Pre-calibrate frequency offset BEFORE decoding any lines (if auto-calibration enabled)
+    // This ensures all lines (including the first 10) are decoded with the correct offset
+    if (this.autoCalibrate && this.freqOffset === 0 && this.mode.colorFormat === 'YUV') {
+      this.freqOffset = this.estimateFreqOffset(samples, position);
+      if (this.freqOffset !== 0) {
+        console.log(`🔧 Pre-calibration: detected ${this.freqOffset}Hz offset`);
+      }
     }
 
     // Decode each line (or line pair for PD modes)
@@ -372,27 +393,6 @@ export class SSTVDecoder {
                 y,
                 this.currentChromaType
               );
-            }
-          }
-        }
-
-        // Auto-calibrate after first 10 lines if enabled
-        if (y === 9 && this.autoCalibrate && this.freqOffset === 0 && this.debugChromaStats) {
-          const { uFreqs, vFreqs } = this.debugChromaStats;
-          if (uFreqs.length > 0 && vFreqs.length > 0) {
-            const avgFreq =
-              (uFreqs.reduce((a, b) => a + b, 0) / uFreqs.length +
-                vFreqs.reduce((a, b) => a + b, 0) / vFreqs.length) /
-              2;
-            const expectedNeutral = 1900; // Frequency for value 128
-            const offset = Math.round(avgFreq - expectedNeutral);
-
-            // Only apply offset if it's significant (>100Hz shift)
-            if (Math.abs(offset) > 100) {
-              console.log(`🔧 Auto-calibration: detected ${offset}Hz offset, recalibrating...`);
-              this.freqOffset = offset;
-              // Clear stats to recalculate with new offset
-              this.debugChromaStats = { uValues: [], vValues: [], uFreqs: [], vFreqs: [] };
             }
           }
         }
@@ -512,7 +512,10 @@ export class SSTVDecoder {
       const endSample = Math.floor(((x + 1) / this.mode.width) * totalSamples);
       const pos = startPos + startSample;
       // Use wider window for better frequency resolution, but don't exceed scan boundary
-      const windowEnd = Math.min(startPos + totalSamples, pos + Math.max(endSample - startSample, minWindowSamples));
+      const windowEnd = Math.min(
+        startPos + totalSamples,
+        pos + Math.max(endSample - startSample, minWindowSamples)
+      );
       const duration = (windowEnd - pos) / this.sampleRate;
 
       if (pos >= samples.length) break;
@@ -520,8 +523,10 @@ export class SSTVDecoder {
       const freq = this.detectFrequencyRange(samples, pos, duration);
 
       // Map frequency to Y value (FULL RANGE 0-255, NOT video range!)
-      // Robot36 uses full range per PySSTV: value = ((freq - 1500) / 800) * 255
-      const normalized = (freq - FREQ_BLACK) / (FREQ_WHITE - FREQ_BLACK);
+      // Apply frequency offset calibration if set (for ISS signals with frequency shift)
+      const freqBlack = FREQ_BLACK + this.freqOffset;
+      const freqWhite = FREQ_WHITE + this.freqOffset;
+      const normalized = (freq - freqBlack) / (freqWhite - freqBlack);
       let value = normalized * 255;
       value = Math.max(0, Math.min(255, Math.round(value)));
 
@@ -553,7 +558,10 @@ export class SSTVDecoder {
       const endSample = Math.floor(((x + 1) / halfWidth) * totalSamples);
       const pixelPos = startPos + startSample;
       // Use wider window for better frequency resolution, but don't exceed scan boundary
-      const windowEnd = Math.min(startPos + totalSamples, pixelPos + Math.max(endSample - startSample, minWindowSamples));
+      const windowEnd = Math.min(
+        startPos + totalSamples,
+        pixelPos + Math.max(endSample - startSample, minWindowSamples)
+      );
       const duration = (windowEnd - pixelPos) / this.sampleRate;
 
       if (pixelPos + (endSample - startSample) >= samples.length) {
@@ -828,6 +836,62 @@ export class SSTVDecoder {
         imageData.data[idx + 2] = B;
       }
     }
+  }
+
+  /**
+   * Estimate frequency offset by pre-scanning chroma from first 20 lines.
+   * Uses porch tones (always 1500Hz/black level) as reference — they follow each sync pulse.
+   * The porch (1.5ms @ 1500Hz) is a reliable reference tone at a known frequency.
+   */
+  estimateFreqOffset(samples, firstSyncPos) {
+    const Y_SCAN_TIME = 0.088;
+    const SEPARATOR_TIME = 0.0045;
+    const PORCH_TIME = 0.0015;
+    const CHROMA_SCAN_TIME = 0.044;
+    const lineTime =
+      this.mode.syncPulse + this.mode.syncPorch + Y_SCAN_TIME + SEPARATOR_TIME + PORCH_TIME + CHROMA_SCAN_TIME;
+    const lineSamples = Math.floor(lineTime * this.sampleRate);
+
+    const measuredPorchFreqs = [];
+    let pos = firstSyncPos;
+
+    for (let line = 0; line < 20; line++) {
+      // Porch (1500Hz black level) starts right after sync pulse
+      const porchStart = pos + Math.floor(this.mode.syncPulse * this.sampleRate);
+      const porchEnd = porchStart + Math.floor(this.mode.syncPorch * this.sampleRate);
+
+      if (porchEnd >= samples.length) break;
+
+      // Fine sweep around 1500Hz (the porch/black level reference)
+      let maxMag = 0;
+      let bestFreq = 1500;
+      for (let f = 1200; f <= 1800; f += 5) {
+        const mag = this.goertzel(samples, porchStart, porchEnd, f);
+        if (mag > maxMag) {
+          maxMag = mag;
+          bestFreq = f;
+        }
+      }
+
+      if (maxMag > 0.01) {
+        measuredPorchFreqs.push(bestFreq - FREQ_BLACK); // deviation from expected 1500Hz
+      }
+
+      pos += lineSamples;
+    }
+
+    if (measuredPorchFreqs.length < 5) return 0;
+
+    // Use median to reject outliers from noisy signal
+    measuredPorchFreqs.sort((a, b) => a - b);
+    const medianOffset = measuredPorchFreqs[Math.floor(measuredPorchFreqs.length / 2)];
+
+    console.log(
+      `📡 Porch measurements: ${measuredPorchFreqs.length} samples, median offset: ${medianOffset}Hz`
+    );
+
+    // Only apply if significant (>50Hz)
+    return Math.abs(medianOffset) > 50 ? Math.round(medianOffset) : 0;
   }
 
   findSyncPulse(samples, startPos, endPos = samples.length) {
