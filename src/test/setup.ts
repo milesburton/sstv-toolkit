@@ -86,5 +86,6 @@ const OriginalImage = Image;
   }
 };
 
-(global as unknown as Record<string, unknown>).webkitAudioContext =
-  (global as unknown as Record<string, unknown>).AudioContext;
+(global as unknown as Record<string, unknown>).webkitAudioContext = (
+  global as unknown as Record<string, unknown>
+).AudioContext;

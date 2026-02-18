@@ -111,7 +111,8 @@ function buildRobot36Signal(imageData: ImageData, opts: BuildOpts = {}): number[
       const startSample = Math.floor((x / width) * yScanSamples);
       const endSample = Math.floor(((x + 1) / width) * yScanSamples);
       const idx = (y * width + x) * 4;
-      const Y = 0.299 * (data[idx] ?? 0) + 0.587 * (data[idx + 1] ?? 0) + 0.114 * (data[idx + 2] ?? 0);
+      const Y =
+        0.299 * (data[idx] ?? 0) + 0.587 * (data[idx + 1] ?? 0) + 0.114 * (data[idx + 2] ?? 0);
       const freq = 1500 + (Math.max(0, Math.min(255, Math.round(Y))) / 255) * 800 + o;
       addTone(samples, freq, (endSample - startSample) / SAMPLE_RATE, phase);
     }
@@ -192,7 +193,11 @@ function makeTestImage(): ImageData {
   return ctx.getImageData(0, 0, 320, 240) as unknown as ImageData;
 }
 
-interface PixelSample { r: number; g: number; b: number }
+interface PixelSample {
+  r: number;
+  g: number;
+  b: number;
+}
 interface DecodeResult {
   diagnostics: { mode: string; freqOffset: number } | null;
   topLeft: PixelSample;
@@ -212,7 +217,10 @@ async function decodeBlob(blob: Blob): Promise<DecodeResult> {
   await new Promise<void>((resolve, reject) => {
     img.onload = () => resolve();
     img.onerror = reject;
-    img.src = Buffer.from(imageUrl.replace(/^data:image\/png;base64,/, ''), 'base64') as unknown as string;
+    img.src = Buffer.from(
+      imageUrl.replace(/^data:image\/png;base64,/, ''),
+      'base64'
+    ) as unknown as string;
   });
   const c = cc(img.width, img.height);
   const ctx = c.getContext('2d');

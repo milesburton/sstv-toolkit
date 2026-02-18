@@ -91,7 +91,9 @@ describe('Encoder-Decoder Round-Trip', () => {
     const resultImageData = resultCtx.getImageData(0, 0, img.width, img.height);
     const pixels = resultImageData.data;
 
-    let sumR = 0, sumG = 0, sumB = 0;
+    let sumR = 0,
+      sumG = 0,
+      sumB = 0;
     const totalPixels = pixels.length / 4;
 
     for (let i = 0; i < pixels.length; i += 4) {
@@ -245,9 +247,13 @@ describe('Encoder-Decoder Round-Trip', () => {
 
     console.log(`\n📊 Colored Blocks Results:`);
     console.log(`   Red block:   R=${results.red?.r}, G=${results.red?.g}, B=${results.red?.b}`);
-    console.log(`   Green block: R=${results.green?.r}, G=${results.green?.g}, B=${results.green?.b}`);
+    console.log(
+      `   Green block: R=${results.green?.r}, G=${results.green?.g}, B=${results.green?.b}`
+    );
     console.log(`   Blue block:  R=${results.blue?.r}, G=${results.blue?.g}, B=${results.blue?.b}`);
-    console.log(`   White block: R=${results.white?.r}, G=${results.white?.g}, B=${results.white?.b}`);
+    console.log(
+      `   White block: R=${results.white?.r}, G=${results.white?.g}, B=${results.white?.b}`
+    );
 
     expect(results.red?.r).toBeGreaterThan(200);
     expect(results.red?.g).toBeLessThan(50);

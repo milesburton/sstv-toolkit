@@ -91,7 +91,9 @@ describe('ISS SSTV Decode Test', () => {
     const imageData = ctx.getImageData(0, 0, img.width, img.height);
     const pixels = imageData.data;
 
-    let avgR = 0, avgG = 0, avgB = 0;
+    let avgR = 0,
+      avgG = 0,
+      avgB = 0;
     let greenDominant = 0;
     let magentaDominant = 0;
     let normalPixels = 0;
