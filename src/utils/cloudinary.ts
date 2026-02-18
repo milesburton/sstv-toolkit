@@ -56,15 +56,9 @@ export async function uploadToCloudinary(
   imageUrl: string,
   config: CloudinaryConfig
 ): Promise<UploadResponse> {
-  // Convert data URL to blob if needed
-  const blob = await (async () => {
-    if (imageUrl.startsWith('data:')) {
-      const response = await fetch(imageUrl);
-      return response.blob();
-    }
-    const response = await fetch(imageUrl);
-    return response.blob();
-  })();
+  // Convert data URL or blob URL to blob
+  const response = await fetch(imageUrl);
+  const blob = await response.blob();
 
   const formData = new FormData();
   formData.append('file', blob);
@@ -72,17 +66,20 @@ export async function uploadToCloudinary(
   formData.append('folder', 'sstv-decoded');
   formData.append('tags', 'sstv,temporary');
 
-  const response = await fetch(`https://api.cloudinary.com/v1_1/${config.cloudName}/image/upload`, {
-    method: 'POST',
-    body: formData,
-  });
+  const uploadResponse = await fetch(
+    `https://api.cloudinary.com/v1_1/${config.cloudName}/image/upload`,
+    {
+      method: 'POST',
+      body: formData,
+    }
+  );
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Upload failed: ${response.status} ${errorText}`);
+  if (!uploadResponse.ok) {
+    const errorText = await uploadResponse.text();
+    throw new Error(`Upload failed: ${uploadResponse.status} ${errorText}`);
   }
 
-  return response.json();
+  return uploadResponse.json();
 }
 
 /**

@@ -15,9 +15,7 @@ test.describe('AI Image Enhancement', () => {
 
     // Wait for decode to complete
     await expect(
-      page
-        .locator('text=Decoded successfully')
-        .or(page.locator('text=Decoded (quality issues)'))
+      page.locator('text=Decoded successfully').or(page.locator('text=Decoded (quality issues)'))
     ).toBeVisible({ timeout: 120000 });
 
     // Check that enhance button appears in decoder panel
@@ -41,16 +39,17 @@ test.describe('AI Image Enhancement', () => {
           resource_type: 'image',
           created_at: new Date().toISOString(),
           url: 'http://res.cloudinary.com/test-cloud/image/upload/v1234567890/sstv-decoded/test-image-123',
-          secure_url: 'https://res.cloudinary.com/test-cloud/image/upload/v1234567890/sstv-decoded/test-image-123',
+          secure_url:
+            'https://res.cloudinary.com/test-cloud/image/upload/v1234567890/sstv-decoded/test-image-123',
         }),
       });
     });
 
     // Set up environment variables for Cloudinary
     await page.addInitScript(() => {
-      // @ts-ignore
+      // @ts-expect-error
       window.__VITE_CLOUDINARY_CLOUD_NAME__ = 'test-cloud';
-      // @ts-ignore
+      // @ts-expect-error
       window.__VITE_CLOUDINARY_UPLOAD_PRESET__ = 'test-preset';
     });
 
@@ -60,9 +59,7 @@ test.describe('AI Image Enhancement', () => {
 
     // Wait for decode to complete
     await expect(
-      page
-        .locator('text=Decoded successfully')
-        .or(page.locator('text=Decoded (quality issues)'))
+      page.locator('text=Decoded successfully').or(page.locator('text=Decoded (quality issues)'))
     ).toBeVisible({ timeout: 120000 });
 
     // Click enhance button
@@ -86,9 +83,7 @@ test.describe('AI Image Enhancement', () => {
 
     // Wait for decode to complete
     await expect(
-      page
-        .locator('text=Decoded successfully')
-        .or(page.locator('text=Decoded (quality issues)'))
+      page.locator('text=Decoded successfully').or(page.locator('text=Decoded (quality issues)'))
     ).toBeVisible({ timeout: 120000 });
 
     // Click enhance button (should fail without credentials)
@@ -97,9 +92,9 @@ test.describe('AI Image Enhancement', () => {
 
     // Expect error message about missing configuration
     await expect(
-      page.locator('text=Cloudinary configuration missing').or(
-        page.locator('text=Enhancement failed')
-      )
+      page
+        .locator('text=Cloudinary configuration missing')
+        .or(page.locator('text=Enhancement failed'))
     ).toBeVisible({ timeout: 10000 });
   });
 
@@ -119,22 +114,10 @@ test.describe('AI Image Enhancement', () => {
           resource_type: 'image',
           created_at: new Date().toISOString(),
           url: 'http://res.cloudinary.com/test-cloud/image/upload/v1234567890/sstv-decoded/test-image-123',
-          secure_url: 'https://res.cloudinary.com/test-cloud/image/upload/v1234567890/sstv-decoded/test-image-123',
+          secure_url:
+            'https://res.cloudinary.com/test-cloud/image/upload/v1234567890/sstv-decoded/test-image-123',
         }),
       });
-    });
-
-    // Set environment variables
-    await page.addInitScript(() => {
-      // @ts-ignore
-      window.import = {
-        meta: {
-          env: {
-            VITE_CLOUDINARY_CLOUD_NAME: 'test-cloud',
-            VITE_CLOUDINARY_UPLOAD_PRESET: 'test-preset',
-          },
-        },
-      };
     });
 
     // Note: This test validates the report button logic exists
@@ -148,9 +131,7 @@ test.describe('AI Image Enhancement', () => {
 
     // Wait for decode to complete
     await expect(
-      page
-        .locator('text=Decoded successfully')
-        .or(page.locator('text=Decoded (quality issues)'))
+      page.locator('text=Decoded successfully').or(page.locator('text=Decoded (quality issues)'))
     ).toBeVisible({ timeout: 120000 });
 
     // Verify enhance button is enabled
