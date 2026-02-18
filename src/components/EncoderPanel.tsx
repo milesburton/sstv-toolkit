@@ -65,7 +65,7 @@ export function EncoderPanel({ onResult, onError, onReset }: Props) {
         <p className="text-white/40 text-xs uppercase tracking-widest">Image → SSTV Audio</p>
       </div>
 
-      <div className="mb-5 flex items-center justify-center gap-3 text-sm">
+      <div className="mb-5 h-9 flex items-center justify-center gap-3 text-sm">
         <label
           className="text-white/50 text-xs uppercase tracking-wider font-medium"
           htmlFor="mode-select"

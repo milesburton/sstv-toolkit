@@ -90,7 +90,7 @@ export function DecoderPanel({ triggerUrl, onTriggerConsumed, onResult, onError,
         <p className="text-white/40 text-xs uppercase tracking-widest">SSTV Audio → Image</p>
       </div>
 
-      <div className="mb-5 flex items-center justify-center gap-3 text-sm">
+      <div className="mb-5 h-9 flex items-center justify-center gap-3 text-sm">
         <p className="text-white/50 text-xs uppercase tracking-wider font-medium">
           Automatic mode detection via VIS code
         </p>
