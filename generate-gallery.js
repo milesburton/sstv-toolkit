@@ -1,10 +1,16 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createCanvas } from 'canvas';
 
+// decodeFile is the WAV used for decoding; audioFile is the download link shown in the gallery.
+// MP3s must be pre-converted to WAV because MockAudioContext only handles PCM.
 const EXAMPLES = [
-  { name: 'ISS PD120', file: 'iss-test.wav' },
-  { name: 'Space Comms Martin M1', file: 'Space_Comms_PD120_SSTV_Test_Recording.mp3' },
-  { name: 'Colour bars', file: 'test-colorbars.wav' },
+  { name: 'ISS PD120', decodeFile: 'iss-test.wav', audioFile: 'iss-test.wav' },
+  {
+    name: 'Space Comms PD120',
+    decodeFile: 'Space_Comms_PD120_SSTV_Test_Recording.wav',
+    audioFile: 'Space_Comms_PD120_SSTV_Test_Recording.mp3',
+  },
+  { name: 'Colour bars', decodeFile: 'test-colorbars.wav', audioFile: 'test-colorbars.wav' },
 ];
 
 function findWavDataOffset(buffer) {
@@ -12,8 +18,12 @@ function findWavDataOffset(buffer) {
   // Walk chunks starting after the 12-byte RIFF header
   let offset = 12;
   while (offset + 8 <= buffer.byteLength) {
-    const id =
-      String.fromCharCode(view.getUint8(offset), view.getUint8(offset + 1), view.getUint8(offset + 2), view.getUint8(offset + 3));
+    const id = String.fromCharCode(
+      view.getUint8(offset),
+      view.getUint8(offset + 1),
+      view.getUint8(offset + 2),
+      view.getUint8(offset + 3)
+    );
     const size = view.getUint32(offset + 4, true);
     if (id === 'data') return offset + 8;
     offset += 8 + size;
@@ -55,8 +65,8 @@ mkdirSync('./public/gallery', { recursive: true });
 const manifest = [];
 
 for (const example of EXAMPLES) {
-  const inputPath = `public/examples/${example.file}`;
-  console.log(`Decoding ${example.file}...`);
+  const inputPath = `public/examples/${example.decodeFile}`;
+  console.log(`Decoding ${example.decodeFile}...`);
 
   try {
     const wavBuffer = readFileSync(inputPath);
@@ -70,7 +80,7 @@ for (const example of EXAMPLES) {
     const decoder = new SSTVDecoder(48000);
     const result = await decoder.decodeAudio(blob);
 
-    const slug = example.file
+    const slug = example.audioFile
       .replace(/[^a-z0-9]/gi, '-')
       .replace(/-+/g, '-')
       .toLowerCase()
@@ -82,7 +92,7 @@ for (const example of EXAMPLES) {
 
     manifest.push({
       name: example.name,
-      audioFile: `examples/${example.file}`,
+      audioFile: `examples/${example.audioFile}`,
       imageFile: imagePath,
       mode: result.diagnostics.mode,
       quality: result.diagnostics.quality.verdict,
