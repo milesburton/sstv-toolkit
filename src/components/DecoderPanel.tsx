@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { DecodeState, WorkerOutboundMessage } from '../types.js';
-import DecoderWorker from '../workers/decoderWorker.ts?worker';
 import { DropZone } from './DropZone.js';
 
 interface Props {
@@ -29,7 +28,9 @@ const AudioIcon = () => (
 
 function decodeWithWorker(buffer: ArrayBuffer): Promise<WorkerOutboundMessage> {
   return new Promise((resolve) => {
-    const worker = new DecoderWorker();
+    const worker = new Worker(new URL('../workers/decoderWorker.ts', import.meta.url), {
+      type: 'module',
+    });
     worker.onmessage = (event: MessageEvent<WorkerOutboundMessage>) => {
       worker.terminate();
       resolve(event.data);

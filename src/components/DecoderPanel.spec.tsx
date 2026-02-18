@@ -29,33 +29,28 @@ const GOOD_RESULT: WorkerOutboundMessage = {
   },
 };
 
-const { workerState } = vi.hoisted(() => {
-  const workerState = {
-    nextResult: null as WorkerOutboundMessage | null,
-    messageHandler: null as ((event: MessageEvent<WorkerOutboundMessage>) => void) | null,
-  };
-  return { workerState };
-});
+let nextWorkerResult: WorkerOutboundMessage = GOOD_RESULT;
 
-vi.mock('../workers/decoderWorker.ts?worker', () => ({
-  default: class MockWorker {
+function makeMockWorker() {
+  let messageHandler: ((event: MessageEvent<WorkerOutboundMessage>) => void) | null = null;
+  return class MockWorker {
     set onmessage(handler: (event: MessageEvent<WorkerOutboundMessage>) => void) {
-      workerState.messageHandler = handler;
+      messageHandler = handler;
     }
     set onerror(_handler: (event: ErrorEvent) => void) {
       /* intentional no-op */
     }
     postMessage(_data: unknown, _transfer?: Transferable[]) {
-      const result = workerState.nextResult;
+      const result = nextWorkerResult;
       Promise.resolve().then(() => {
-        workerState.messageHandler?.({ data: result } as MessageEvent<WorkerOutboundMessage>);
+        messageHandler?.({ data: result } as MessageEvent<WorkerOutboundMessage>);
       });
     }
     terminate() {
       /* intentional no-op */
     }
-  },
-}));
+  };
+}
 
 import { DecoderPanel } from './DecoderPanel.js';
 
@@ -63,8 +58,8 @@ const noop = vi.fn();
 
 describe('DecoderPanel', () => {
   beforeEach(() => {
-    workerState.nextResult = GOOD_RESULT;
-    workerState.messageHandler = null;
+    nextWorkerResult = GOOD_RESULT;
+    vi.stubGlobal('Worker', makeMockWorker());
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue({
@@ -156,7 +151,7 @@ describe('DecoderPanel', () => {
   });
 
   it('calls onError when worker returns an error message', async () => {
-    workerState.nextResult = { type: 'error', message: 'Worker decode error' };
+    nextWorkerResult = { type: 'error', message: 'Worker decode error' };
     const onError = vi.fn();
     render(
       <DecoderPanel
