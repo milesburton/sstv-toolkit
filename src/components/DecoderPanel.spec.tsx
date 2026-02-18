@@ -54,7 +54,7 @@ describe('DecoderPanel', () => {
 
   it('renders the drop zone by default', () => {
     render(<DecoderPanel onResult={noop} onError={noop} onReset={noop} />);
-    expect(screen.getByText(/SSTV Audio → Image/i)).toBeInTheDocument();
+    expect(screen.getByText(/Decoder/i)).toBeInTheDocument();
     expect(document.querySelector('input[type="file"]')).toBeInTheDocument();
   });
 

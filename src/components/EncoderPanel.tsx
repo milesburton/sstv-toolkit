@@ -61,8 +61,7 @@ export function EncoderPanel({ onResult, onError, onReset }: Props) {
   return (
     <div className="bg-transparent">
       <div className="text-center mb-6 pb-5 border-b border-white/10">
-        <h2 className="text-white text-xl font-semibold mb-1 tracking-wide">Encoder</h2>
-        <p className="text-white/40 text-xs uppercase tracking-widest">Image → SSTV Audio</p>
+        <h2 className="text-white text-xl font-semibold tracking-wide">Encoder</h2>
       </div>
 
       <div className="mb-5 h-9 flex items-center justify-center gap-3 text-sm">

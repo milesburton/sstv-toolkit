@@ -13,10 +13,9 @@ function useStarfield() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    type Star = { x: number; y: number; r: number; depth: number; opacity: number };
+    type Star = { x: number; y: number; r: number; speed: number; opacity: number };
     let stars: Star[] = [];
     let animId: number;
-    let scrollY = 0;
 
     const resize = () => {
       canvas.width = window.innerWidth;
@@ -25,7 +24,7 @@ function useStarfield() {
         x: Math.random() * canvas.width,
         y: Math.random() * canvas.height,
         r: Math.random() * 1.4 + 0.3,
-        depth: Math.random() * 0.8 + 0.2,
+        speed: Math.random() * 0.15 + 0.04,
         opacity: Math.random() * 0.6 + 0.2,
       }));
     };
@@ -33,28 +32,25 @@ function useStarfield() {
     const draw = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       for (const s of stars) {
-        const parallax = scrollY * s.depth * 0.08;
-        const y = (((s.y - parallax) % canvas.height) + canvas.height) % canvas.height;
+        s.y += s.speed;
+        if (s.y > canvas.height) {
+          s.y = 0;
+          s.x = Math.random() * canvas.width;
+        }
         ctx.beginPath();
-        ctx.arc(s.x, y, s.r, 0, Math.PI * 2);
+        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
         ctx.fillStyle = `rgba(200, 215, 255, ${s.opacity})`;
         ctx.fill();
       }
       animId = requestAnimationFrame(draw);
     };
 
-    const onScroll = () => {
-      scrollY = window.scrollY;
-    };
-
     resize();
     draw();
     window.addEventListener('resize', resize);
-    window.addEventListener('scroll', onScroll, { passive: true });
     return () => {
       cancelAnimationFrame(animId);
       window.removeEventListener('resize', resize);
-      window.removeEventListener('scroll', onScroll);
     };
   }, []);
 }
@@ -127,10 +123,10 @@ export default function App() {
       <div className="w-full max-w-6xl mx-auto px-6 py-10">
         <header className="text-center mb-10">
           <h1 className="text-5xl font-bold mb-3 tracking-tight text-white drop-shadow-lg">
-            SSTV Toolkit
+            Slow Scan Television
           </h1>
           <p className="text-sm text-white/50 tracking-widest uppercase font-medium">
-            Slow-Scan Television &mdash; Encode &amp; Decode in your browser
+            In browser SSTV encoder and decoder
           </p>
         </header>
 
