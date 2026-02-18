@@ -98,6 +98,7 @@ export class SSTVDecoder {
   }
 
   async decodeAudioBuffer(arrayBuffer: ArrayBuffer): Promise<DecodeImageResult> {
+    const wav = isWAV(arrayBuffer);
     if (typeof AudioContext !== 'undefined' || typeof OfflineAudioContext !== 'undefined') {
       const Ctor = typeof AudioContext !== 'undefined' ? AudioContext : OfflineAudioContext;
       try {
@@ -110,11 +111,13 @@ export class SSTVDecoder {
         this.sampleRate = audioBuffer.sampleRate;
         return this.decodeSamples(samples);
       } catch (err) {
-        if (!isWAV(arrayBuffer)) throw err;
+        // decodeAudioData transfers (detaches) the buffer on failure in some browsers,
+        // so we captured isWAV() before the call above.
+        if (!wav) throw err;
       }
     }
 
-    if (!isWAV(arrayBuffer)) {
+    if (!wav) {
       throw new Error(
         'Web Audio API is unavailable in this environment and the file is not a WAV. ' +
           'Please use a WAV file.'
