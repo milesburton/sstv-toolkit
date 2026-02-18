@@ -56,7 +56,7 @@ export function GalleryPanel({ onTryDecode }: Props) {
                 {onTryDecode && (
                   <button
                     onClick={() => onTryDecode(entry.audioFile)}
-                    className="flex-1 px-3 py-2 text-xs font-semibold bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors"
+                    className="flex-1 px-3 py-2 text-xs font-semibold border border-white/20 text-white/60 rounded-lg hover:border-primary hover:text-primary transition-colors"
                   >
                     Try decoding
                   </button>

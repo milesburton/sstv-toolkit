@@ -35,7 +35,7 @@ export function DropZone({ accept, onFile, processing, icon, hint, inputId, chil
 
   return (
     <section
-      className={`border-2 border-dashed rounded-xl p-8 transition-all mb-4 ${
+      className={`border-2 border-dashed rounded-xl p-8 transition-all mb-4 min-h-50 flex flex-col justify-center ${
         dragActive ? 'border-primary bg-primary-bg scale-[1.01]' : 'border-white/20 bg-white/[0.03]'
       } ${processing ? 'opacity-50 pointer-events-none' : ''}`}
       onDragEnter={handleDrag}
