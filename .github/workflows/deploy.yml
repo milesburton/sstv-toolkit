@@ -36,6 +36,13 @@ jobs:
       - name: Build
         run: bun run build
 
+      - name: Verify worker chunk in dist
+        run: |
+          if ! ls dist/assets/decoderWorker-*.js 2>/dev/null | grep -q .; then
+            echo "ERROR: decoderWorker chunk not found in dist/assets/" && exit 1
+          fi
+          echo "Worker chunk found: $(ls dist/assets/decoderWorker-*.js)"
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
 

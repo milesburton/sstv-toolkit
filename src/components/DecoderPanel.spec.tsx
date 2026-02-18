@@ -30,10 +30,14 @@ const GOOD_RESULT: WorkerOutboundMessage = {
 };
 
 let nextWorkerResult: WorkerOutboundMessage = GOOD_RESULT;
+const workerConstructorArgs: ConstructorParameters<typeof Worker>[] = [];
 
 function makeMockWorker() {
   let messageHandler: ((event: MessageEvent<WorkerOutboundMessage>) => void) | null = null;
   return class MockWorker {
+    constructor(...args: ConstructorParameters<typeof Worker>) {
+      workerConstructorArgs.push(args);
+    }
     set onmessage(handler: (event: MessageEvent<WorkerOutboundMessage>) => void) {
       messageHandler = handler;
     }
@@ -59,6 +63,7 @@ const noop = vi.fn();
 describe('DecoderPanel', () => {
   beforeEach(() => {
     nextWorkerResult = GOOD_RESULT;
+    workerConstructorArgs.length = 0;
     vi.stubGlobal('Worker', makeMockWorker());
     vi.stubGlobal(
       'fetch',
@@ -170,5 +175,24 @@ describe('DecoderPanel', () => {
   it('does not auto-decode when triggerUrl is null', () => {
     render(<DecoderPanel triggerUrl={null} onResult={noop} onError={noop} onReset={noop} />);
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('instantiates Worker with a URL object, not a string (regression: ?worker import breaks prod build)', async () => {
+    render(
+      <DecoderPanel
+        triggerUrl="examples/iss-test.wav"
+        onResult={noop}
+        onError={noop}
+        onReset={noop}
+      />
+    );
+
+    await waitFor(() => {
+      expect(workerConstructorArgs.length).toBeGreaterThan(0);
+    });
+
+    const [scriptUrl] = workerConstructorArgs[0] ?? [];
+    expect(scriptUrl).toBeInstanceOf(URL);
+    expect((scriptUrl as URL).href).toMatch(/decoderWorker/);
   });
 });
