@@ -4,16 +4,7 @@ import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { createCanvas } from 'canvas';
 
-/**
- * End-to-End Integration Tests for SSTV Toolkit
- * These tests verify the complete encode→decode workflow in a real browser
- * and validate that decoded images contain actual pixel data (not black).
- */
-
-/**
- * Helper: Encode an image file through the UI and return the downloaded audio path.
- */
-async function encodeImage(page, testImagePath) {
+async function encodeImage(page: import('@playwright/test').Page, testImagePath: string) {
   const encodeInput = page.locator('input[type="file"]').first();
   await encodeInput.setInputFiles(testImagePath);
 
@@ -33,12 +24,7 @@ async function encodeImage(page, testImagePath) {
   return audioPath;
 }
 
-/**
- * Helper: Decode an audio file through the UI and return decoded image pixel stats.
- * Returns { avgBrightness, maxBrightness, nonBlackPixels, totalPixels }
- */
-async function decodeAndValidate(page, audioPath) {
-  // Reset encoder if needed, then decode
+async function decodeAndValidate(page: import('@playwright/test').Page, audioPath: string) {
   const encodeAnother = page.locator('button:has-text("Encode Another")');
   if (await encodeAnother.isVisible()) {
     await encodeAnother.click();
@@ -54,17 +40,24 @@ async function decodeAndValidate(page, audioPath) {
 
   const imageSrc = await decodedImage.getAttribute('src');
   expect(imageSrc).toMatch(/^data:image\/png;base64,/);
-  expect(imageSrc.length).toBeGreaterThan(1000);
+  expect(imageSrc?.length).toBeGreaterThan(1000);
 
-  // Extract pixel data from the decoded image in the browser
-  const pixelStats = await page.evaluate(async (src) => {
-    return new Promise((resolve) => {
+  const pixelStats = await page.evaluate(async (src: string) => {
+    return new Promise<{
+      avgBrightness: number;
+      maxBrightness: number;
+      nonBlackPixels: number;
+      totalPixels: number;
+      width: number;
+      height: number;
+    }>((resolve) => {
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement('canvas');
         canvas.width = img.width;
         canvas.height = img.height;
         const ctx = canvas.getContext('2d');
+        if (!ctx) return;
         ctx.drawImage(img, 0, 0);
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const data = imageData.data;
@@ -75,7 +68,7 @@ async function decodeAndValidate(page, audioPath) {
         const totalPixels = canvas.width * canvas.height;
 
         for (let i = 0; i < data.length; i += 4) {
-          const brightness = (data[i] + data[i + 1] + data[i + 2]) / 3;
+          const brightness = ((data[i] ?? 0) + (data[i + 1] ?? 0) + (data[i + 2] ?? 0)) / 3;
           totalBrightness += brightness;
           if (brightness > maxBrightness) maxBrightness = brightness;
           if (brightness > 10) nonBlackPixels++;
@@ -92,7 +85,7 @@ async function decodeAndValidate(page, audioPath) {
       };
       img.src = src;
     });
-  }, imageSrc);
+  }, imageSrc ?? '');
 
   return pixelStats;
 }
@@ -106,7 +99,6 @@ test.describe('SSTV Encode → Decode Integration', () => {
   test('should encode and decode a black/white test pattern with visible pixels', async ({
     page,
   }) => {
-    // Create a high-contrast test image: left half black, right half white
     const canvas = createCanvas(320, 240);
     const ctx = canvas.getContext('2d');
     ctx.fillStyle = 'black';
@@ -117,21 +109,16 @@ test.describe('SSTV Encode → Decode Integration', () => {
     const testImagePath = join(tmpdir(), 'sstv-test-pattern.png');
     writeFileSync(testImagePath, canvas.toBuffer('image/png'));
 
-    // Encode
     const audioPath = await encodeImage(page, testImagePath);
 
-    // Decode and validate pixel data
     const stats = await decodeAndValidate(page, audioPath);
 
-    // The decoded image MUST have non-black pixels
-    // A black/white pattern should decode to at least some bright pixels
     expect(stats.nonBlackPixels).toBeGreaterThan(stats.totalPixels * 0.1);
     expect(stats.maxBrightness).toBeGreaterThan(50);
     expect(stats.avgBrightness).toBeGreaterThan(10);
   });
 
   test('should decode a bright image with substantial brightness', async ({ page }) => {
-    // Create a fully white image - decoded version should be bright
     const canvas = createCanvas(320, 240);
     const ctx = canvas.getContext('2d');
     ctx.fillStyle = 'white';
@@ -143,7 +130,6 @@ test.describe('SSTV Encode → Decode Integration', () => {
     const audioPath = await encodeImage(page, testImagePath);
     const stats = await decodeAndValidate(page, audioPath);
 
-    // A white image should decode to mostly bright pixels
     expect(stats.nonBlackPixels).toBeGreaterThan(stats.totalPixels * 0.5);
     expect(stats.avgBrightness).toBeGreaterThan(50);
   });

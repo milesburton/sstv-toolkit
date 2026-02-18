@@ -2,16 +2,14 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 beforeAll(async () => {
   global.AudioContext = class {
-    constructor() {
-      this.sampleRate = 48000;
-    }
-  };
+    sampleRate = 48000;
+  } as unknown as typeof AudioContext;
 
   if (!global.URL) {
     global.URL = {
       createObjectURL: () => 'mock://image',
       revokeObjectURL: () => undefined,
-    };
+    } as unknown as typeof URL;
   }
 });
 
@@ -24,7 +22,7 @@ describe('Color Conversion Diagnostic', () => {
       { r: 128, g: 128, b: 128, name: 'Gray' },
     ];
 
-    testCases.forEach(({ r, g, b, name }) => {
+    for (const { r, g, b, name } of testCases) {
       const Y_enc = 0.299 * r + 0.587 * g + 0.114 * b;
       const U_enc = 128 + (b - Y_enc) * 0.5;
       const V_enc = 128 + (r - Y_enc) * 0.5;
@@ -44,7 +42,7 @@ describe('Color Conversion Diagnostic', () => {
       expect(Math.abs(R_dec - r)).toBeLessThan(5);
       expect(Math.abs(G_dec - g)).toBeLessThan(5);
       expect(Math.abs(B_dec - b)).toBeLessThan(5);
-    });
+    }
   });
 
   it('should verify BT.601 formulas are mathematically consistent', () => {

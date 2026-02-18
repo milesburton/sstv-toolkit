@@ -4,7 +4,7 @@ import { FMDemodulator } from '../src/utils/FMDemodulator.js';
 describe('FM Demodulation Integration', () => {
   it('should demodulate SSTV-like signal pattern', () => {
     const sampleRate = 48000;
-    const samples = [];
+    const samples: number[] = [];
 
     for (let i = 0; i < 432; i++) {
       samples.push(Math.sin((2 * Math.PI * 1200 * i) / sampleRate));
@@ -28,7 +28,7 @@ describe('FM Demodulation Integration', () => {
 
     const syncRegion = demodulated.slice(200, 400);
     const syncAvg = syncRegion.reduce((a, b) => a + b, 0) / syncRegion.length;
-    expect(syncAvg).toBeLessThan(-0.9); // Sync at 1200 Hz is -700 Hz from center (clamped to -1)
+    expect(syncAvg).toBeLessThan(-0.9);
 
     const dataStart = demodulated.slice(600, 800);
     const dataEnd = demodulated.slice(4400, 4600);
@@ -36,8 +36,8 @@ describe('FM Demodulation Integration', () => {
     const startAvg = dataStart.reduce((a, b) => a + b, 0) / dataStart.length;
     const endAvg = dataEnd.reduce((a, b) => a + b, 0) / dataEnd.length;
 
-    expect(startAvg).toBeLessThan(-0.7); // Should be near -1 (1500 Hz)
-    expect(endAvg).toBeGreaterThan(0.7); // Should be near +1 (2300 Hz)
+    expect(startAvg).toBeLessThan(-0.7);
+    expect(endAvg).toBeGreaterThan(0.7);
   });
 
   it('should handle frequency drift simulation', () => {
@@ -45,7 +45,7 @@ describe('FM Demodulation Integration', () => {
     const duration = 0.1;
     const numSamples = Math.floor(duration * sampleRate);
 
-    const samples = [];
+    const samples: number[] = [];
     let phase = 0;
 
     for (let i = 0; i < numSamples; i++) {
@@ -63,7 +63,7 @@ describe('FM Demodulation Integration', () => {
 
     let avg = 0;
     for (let i = Math.floor(numSamples * 0.3); i < Math.floor(numSamples * 0.7); i++) {
-      avg += output[i];
+      avg += output[i] ?? 0;
     }
     avg /= Math.floor(numSamples * 0.4);
 
@@ -74,7 +74,7 @@ describe('FM Demodulation Integration', () => {
     const sampleRate = 48000;
     const fmDemod = new FMDemodulator(1900, 800, sampleRate);
 
-    const blackSamples = [];
+    const blackSamples: number[] = [];
     for (let i = 0; i < 480; i++) {
       blackSamples.push(Math.sin((2 * Math.PI * 1500 * i) / sampleRate));
     }
@@ -86,7 +86,7 @@ describe('FM Demodulation Integration', () => {
 
     fmDemod.reset();
 
-    const whiteSamples = [];
+    const whiteSamples: number[] = [];
     for (let i = 0; i < 480; i++) {
       whiteSamples.push(Math.sin((2 * Math.PI * 2300 * i) / sampleRate));
     }
@@ -101,7 +101,7 @@ describe('FM Demodulation Integration', () => {
     const sampleRate = 48000;
     const fmDemod = new FMDemodulator(1900, 800, sampleRate);
 
-    const samples = [];
+    const samples: number[] = [];
     for (let i = 0; i < sampleRate; i++) {
       samples.push(Math.sin((2 * Math.PI * 2100 * i) / sampleRate));
     }
@@ -117,11 +117,10 @@ describe('FM Demodulation Integration', () => {
 
       let avg = 0;
       for (let i = start; i < end; i++) {
-        avg += output[i];
+        avg += output[i] ?? 0;
       }
       avg /= end - start;
 
-      // Expected: (2100 - 1900) / 400 = 0.5
       expect(avg).toBeGreaterThan(0.4);
       expect(avg).toBeLessThan(0.6);
     }
@@ -131,7 +130,7 @@ describe('FM Demodulation Integration', () => {
     const sampleRate = 48000;
     const fmDemod = new FMDemodulator(1900, 800, sampleRate);
 
-    const samples = [];
+    const samples: number[] = [];
     for (let i = 0; i < 4800; i++) {
       const signal = Math.sin((2 * Math.PI * 1900 * i) / sampleRate);
       const noise = (Math.random() - 0.5) * 0.2;
@@ -142,7 +141,7 @@ describe('FM Demodulation Integration', () => {
 
     let avg = 0;
     for (let i = 1000; i < 4000; i++) {
-      avg += output[i];
+      avg += output[i] ?? 0;
     }
     avg /= 3000;
 

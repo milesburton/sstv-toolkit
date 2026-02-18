@@ -46,11 +46,11 @@ describe('FM Demodulation Components', () => {
         samples.push(phasor.rotate());
       }
 
-      expect(samples[0].real).toBeCloseTo(1, 5);
-      expect(samples[0].imag).toBeCloseTo(0, 5);
+      expect(samples[0]?.real).toBeCloseTo(1, 5);
+      expect(samples[0]?.imag).toBeCloseTo(0, 5);
 
       const lastSample = samples[samples.length - 1];
-      expect(lastSample.abs()).toBeCloseTo(1, 5);
+      expect(lastSample?.abs()).toBeCloseTo(1, 5);
     });
 
     it('should maintain unit magnitude', () => {
@@ -80,7 +80,7 @@ describe('FM Demodulation Components', () => {
       const filter = new KaiserFIR(cutoff, sampleRate, 0.002);
 
       const dcValue = new Complex(1, 0);
-      let output;
+      let output: Complex = new Complex(0, 0);
       for (let i = 0; i < 100; i++) {
         output = filter.push(dcValue);
       }
@@ -97,7 +97,7 @@ describe('FM Demodulation Components', () => {
       const highFreq = 2000;
       const phasor = new Phasor(highFreq, sampleRate);
 
-      let output;
+      let output: Complex = new Complex(0, 0);
       for (let i = 0; i < 200; i++) {
         output = filter.push(phasor.rotate());
       }
@@ -120,7 +120,7 @@ describe('FM Demodulation Components', () => {
       const bandwidth = 800;
       const demod = new FMDemodulator(centerFreq, bandwidth, sampleRate);
 
-      const samples = [];
+      const samples: number[] = [];
       for (let i = 0; i < sampleRate; i++) {
         samples.push(Math.sin((2 * Math.PI * centerFreq * i) / sampleRate));
       }
@@ -129,7 +129,7 @@ describe('FM Demodulation Components', () => {
 
       let avgOutput = 0;
       for (let i = Math.floor(sampleRate * 0.1); i < sampleRate; i++) {
-        avgOutput += output[i];
+        avgOutput += output[i] ?? 0;
       }
       avgOutput /= sampleRate * 0.9;
 
@@ -142,7 +142,7 @@ describe('FM Demodulation Components', () => {
       const bandwidth = 800;
       const demod = new FMDemodulator(centerFreq, bandwidth, sampleRate);
 
-      const samples = [];
+      const samples: number[] = [];
       const duration = 0.1;
       const numSamples = Math.floor(duration * sampleRate);
 
@@ -174,7 +174,7 @@ describe('FM Demodulation Components', () => {
       const sampleRate = 48000;
       const demod = new FMDemodulator(1900, 800, sampleRate);
 
-      const blackSamples = [];
+      const blackSamples: number[] = [];
       for (let i = 0; i < 1000; i++) {
         blackSamples.push(Math.sin((2 * Math.PI * 1500 * i) / sampleRate));
       }
@@ -184,7 +184,7 @@ describe('FM Demodulation Components', () => {
 
       demod.reset();
 
-      const whiteSamples = [];
+      const whiteSamples: number[] = [];
       for (let i = 0; i < 1000; i++) {
         whiteSamples.push(Math.sin((2 * Math.PI * 2300 * i) / sampleRate));
       }

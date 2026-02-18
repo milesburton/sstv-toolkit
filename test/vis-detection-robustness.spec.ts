@@ -3,7 +3,12 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 const SAMPLE_RATE = 48000;
 
-function addTone(samples, frequency, duration, phase = { value: 0 }) {
+function addTone(
+  samples: number[],
+  frequency: number,
+  duration: number,
+  phase: { value: number } = { value: 0 }
+) {
   const numSamples = Math.floor(duration * SAMPLE_RATE);
   const phaseInc = (2 * Math.PI * frequency) / SAMPLE_RATE;
   for (let i = 0; i < numSamples; i++) {
@@ -13,7 +18,7 @@ function addTone(samples, frequency, duration, phase = { value: 0 }) {
   phase.value %= 2 * Math.PI;
 }
 
-function samplesToWavBlob(samples) {
+function samplesToWavBlob(samples: number[]): Blob {
   const buffer = new ArrayBuffer(44 + samples.length * 2);
   const view = new DataView(buffer);
   view.setUint8(0, 0x52);
@@ -49,7 +54,15 @@ function samplesToWavBlob(samples) {
   return new Blob([buffer], { type: 'audio/wav' });
 }
 
-function buildRobot36Signal(imageData, opts = {}) {
+interface BuildOpts {
+  freqOffset?: number;
+  leaderDuration?: number;
+  falseGlitch?: boolean;
+  breakDuration?: number;
+  omitStartBit?: boolean;
+}
+
+function buildRobot36Signal(imageData: ImageData, opts: BuildOpts = {}): number[] {
   const {
     freqOffset = 0,
     leaderDuration = 0.3,
@@ -60,7 +73,7 @@ function buildRobot36Signal(imageData, opts = {}) {
 
   const o = freqOffset;
   const phase = { value: 0 };
-  const samples = [];
+  const samples: number[] = [];
 
   if (falseGlitch) {
     addTone(samples, 1900 + o, leaderDuration / 2, phase);
@@ -98,7 +111,7 @@ function buildRobot36Signal(imageData, opts = {}) {
       const startSample = Math.floor((x / width) * yScanSamples);
       const endSample = Math.floor(((x + 1) / width) * yScanSamples);
       const idx = (y * width + x) * 4;
-      const Y = 0.299 * data[idx] + 0.587 * data[idx + 1] + 0.114 * data[idx + 2];
+      const Y = 0.299 * (data[idx] ?? 0) + 0.587 * (data[idx + 1] ?? 0) + 0.114 * (data[idx + 2] ?? 0);
       const freq = 1500 + (Math.max(0, Math.min(255, Math.round(Y))) / 255) * 800 + o;
       addTone(samples, freq, (endSample - startSample) / SAMPLE_RATE, phase);
     }
@@ -112,16 +125,11 @@ function buildRobot36Signal(imageData, opts = {}) {
       const startSample = Math.floor((x / halfWidth) * chromaScanSamples);
       const endSample = Math.floor(((x + 1) / halfWidth) * chromaScanSamples);
       const i0 = (y * width + x * 2) * 4;
-      const r = data[i0],
-        g = data[i0 + 1],
-        b = data[i0 + 2];
+      const r = data[i0] ?? 0;
+      const g = data[i0 + 1] ?? 0;
+      const b = data[i0 + 2] ?? 0;
       const Yv = 0.299 * r + 0.587 * g + 0.114 * b;
-      let chromaVal;
-      if (isEvenLine) {
-        chromaVal = 128 + 0.701 * (r - Yv);
-      } else {
-        chromaVal = 128 + 0.886 * (b - Yv);
-      }
+      const chromaVal = isEvenLine ? 128 + 0.701 * (r - Yv) : 128 + 0.886 * (b - Yv);
       const freq = 1500 + (Math.max(0, Math.min(255, Math.round(chromaVal))) / 255) * 800 + o;
       addTone(samples, freq, (endSample - startSample) / SAMPLE_RATE, phase);
     }
@@ -130,20 +138,18 @@ function buildRobot36Signal(imageData, opts = {}) {
   return samples;
 }
 
-function wrapWithSilence(signalSamples, prefixSeconds) {
-  const silenceSamples = new Array(Math.floor(prefixSeconds * SAMPLE_RATE)).fill(0);
+function wrapWithSilence(signalSamples: number[], prefixSeconds: number): Blob {
+  const silenceSamples = new Array<number>(Math.floor(prefixSeconds * SAMPLE_RATE)).fill(0);
   return samplesToWavBlob([...silenceSamples, ...signalSamples]);
 }
 
-let SSTVDecoder;
+let SSTVDecoder: typeof import('../src/utils/SSTVDecoder.js').SSTVDecoder;
 
 beforeAll(async () => {
-  global.window = {
+  (global as unknown as Record<string, unknown>).window = {
     AudioContext: class {
-      constructor() {
-        this.sampleRate = SAMPLE_RATE;
-      }
-      decodeAudioData(arrayBuffer) {
+      sampleRate = SAMPLE_RATE;
+      decodeAudioData(arrayBuffer: ArrayBuffer) {
         const view = new DataView(arrayBuffer);
         const numSamples = (arrayBuffer.byteLength - 44) / 2;
         const samples = new Float32Array(numSamples);
@@ -161,8 +167,8 @@ beforeAll(async () => {
     },
   };
 
-  global.document = {
-    createElement: (tag) => {
+  (global as unknown as Record<string, unknown>).document = {
+    createElement: (tag: string) => {
       if (tag === 'canvas') return createCanvas(320, 240);
       return {};
     },
@@ -172,7 +178,7 @@ beforeAll(async () => {
   SSTVDecoder = mod.SSTVDecoder;
 });
 
-function makeTestImage() {
+function makeTestImage(): ImageData {
   const canvas = createCanvas(320, 240);
   const ctx = canvas.getContext('2d');
   ctx.fillStyle = 'rgb(255, 0, 0)';
@@ -183,10 +189,19 @@ function makeTestImage() {
   ctx.fillRect(0, 120, 160, 120);
   ctx.fillStyle = 'rgb(255, 255, 255)';
   ctx.fillRect(160, 120, 160, 120);
-  return ctx.getImageData(0, 0, 320, 240);
+  return ctx.getImageData(0, 0, 320, 240) as unknown as ImageData;
 }
 
-async function decodeBlob(blob) {
+interface PixelSample { r: number; g: number; b: number }
+interface DecodeResult {
+  diagnostics: { mode: string; freqOffset: number } | null;
+  topLeft: PixelSample;
+  topRight: PixelSample;
+  bottomLeft: PixelSample;
+  bottomRight: PixelSample;
+}
+
+async function decodeBlob(blob: Blob): Promise<DecodeResult> {
   const decoder = new SSTVDecoder(SAMPLE_RATE);
   const result = await decoder.decodeAudio(blob);
   const imageUrl = typeof result === 'string' ? result : result.imageUrl;
@@ -194,19 +209,19 @@ async function decodeBlob(blob) {
 
   const { createCanvas: cc, Image } = await import('canvas');
   const img = new Image();
-  await new Promise((resolve, reject) => {
-    img.onload = resolve;
+  await new Promise<void>((resolve, reject) => {
+    img.onload = () => resolve();
     img.onerror = reject;
-    img.src = Buffer.from(imageUrl.replace(/^data:image\/png;base64,/, ''), 'base64');
+    img.src = Buffer.from(imageUrl.replace(/^data:image\/png;base64,/, ''), 'base64') as unknown as string;
   });
   const c = cc(img.width, img.height);
   const ctx = c.getContext('2d');
-  ctx.drawImage(img, 0, 0);
+  ctx.drawImage(img as unknown as CanvasImageSource, 0, 0);
   const px = ctx.getImageData(0, 0, img.width, img.height).data;
 
-  const sample = (x, y) => {
+  const sample = (x: number, y: number): PixelSample => {
     const i = (y * img.width + x) * 4;
-    return { r: px[i], g: px[i + 1], b: px[i + 2] };
+    return { r: px[i] ?? 0, g: px[i + 1] ?? 0, b: px[i + 2] ?? 0 };
   };
 
   return {

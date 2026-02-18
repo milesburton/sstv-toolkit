@@ -1,13 +1,8 @@
-/**
- * Integration test for ISS SSTV file decoding
- * This test uses a real ISS transmission to verify the decoder works correctly
- */
-
 import { readFileSync } from 'node:fs';
 import { createCanvas, Image } from 'canvas';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-function findWavDataOffset(buffer) {
+function findWavDataOffset(buffer: ArrayBuffer): number {
   const view = new DataView(buffer);
   let offset = 12;
   while (offset + 8 <= buffer.byteLength) {
@@ -25,19 +20,16 @@ function findWavDataOffset(buffer) {
 }
 
 class MockAudioContext {
-  constructor() {
-    this.sampleRate = 48000;
-  }
+  sampleRate = 48000;
 
-  decodeAudioData(arrayBuffer) {
+  decodeAudioData(arrayBuffer: ArrayBuffer) {
     const dataOffset = findWavDataOffset(arrayBuffer);
     const view = new DataView(arrayBuffer);
     const numSamples = (arrayBuffer.byteLength - dataOffset) / 2;
     const samples = new Float32Array(numSamples);
 
     for (let i = 0; i < numSamples; i++) {
-      const sample = view.getInt16(dataOffset + i * 2, true);
-      samples[i] = sample / 32768.0;
+      samples[i] = view.getInt16(dataOffset + i * 2, true) / 32768.0;
     }
 
     return Promise.resolve({
@@ -51,15 +43,13 @@ class MockAudioContext {
   }
 }
 
-let SSTVDecoder;
+let SSTVDecoder: typeof import('../src/utils/SSTVDecoder.js').SSTVDecoder;
 
 beforeAll(async () => {
-  global.window = { AudioContext: MockAudioContext };
-  global.document = {
-    createElement: (tag) => {
-      if (tag === 'canvas') {
-        return createCanvas(320, 240);
-      }
+  (global as unknown as Record<string, unknown>).window = { AudioContext: MockAudioContext };
+  (global as unknown as Record<string, unknown>).document = {
+    createElement: (tag: string) => {
+      if (tag === 'canvas') return createCanvas(320, 240);
       return {};
     },
   };
@@ -79,7 +69,7 @@ describe('ISS SSTV Decode Test', () => {
     };
 
     const decoder = new SSTVDecoder(48000);
-    const decoded = await decoder.decodeAudio(blob);
+    const decoded = await decoder.decodeAudio(blob as Blob);
     const result = typeof decoded === 'string' ? decoded : decoded.imageUrl;
 
     expect(result).toBeDefined();
@@ -89,47 +79,37 @@ describe('ISS SSTV Decode Test', () => {
     const imgBuffer = Buffer.from(base64Data, 'base64');
 
     const img = new Image();
-    await new Promise((resolve, reject) => {
-      img.onload = resolve;
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
       img.onerror = reject;
-      img.src = imgBuffer;
+      img.src = imgBuffer as unknown as string;
     });
 
     const canvas = createCanvas(img.width, img.height);
     const ctx = canvas.getContext('2d');
-    ctx.drawImage(img, 0, 0);
+    ctx.drawImage(img as unknown as CanvasImageSource, 0, 0);
     const imageData = ctx.getImageData(0, 0, img.width, img.height);
     const pixels = imageData.data;
 
-    let avgR = 0,
-      avgG = 0,
-      avgB = 0;
+    let avgR = 0, avgG = 0, avgB = 0;
     let greenDominant = 0;
     let magentaDominant = 0;
     let normalPixels = 0;
 
     for (let i = 0; i < pixels.length; i += 4) {
-      const r = pixels[i];
-      const g = pixels[i + 1];
-      const b = pixels[i + 2];
+      const r = pixels[i] ?? 0;
+      const g = pixels[i + 1] ?? 0;
+      const b = pixels[i + 2] ?? 0;
 
       avgR += r;
       avgG += g;
       avgB += b;
 
-      // threshold of 40 to account for noise in real ISS signals
-      if (g > r + 40 && g > b + 40) {
-        greenDominant++;
-      }
-
-      if (r > 150 && b > 150 && g < 100) {
-        magentaDominant++;
-      }
+      if (g > r + 40 && g > b + 40) greenDominant++;
+      if (r > 150 && b > 150 && g < 100) magentaDominant++;
 
       const maxDiff = Math.max(Math.abs(r - g), Math.abs(g - b), Math.abs(r - b));
-      if (maxDiff < 80) {
-        normalPixels++;
-      }
+      if (maxDiff < 80) normalPixels++;
     }
 
     const totalPixels = pixels.length / 4;

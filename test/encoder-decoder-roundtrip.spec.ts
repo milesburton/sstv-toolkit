@@ -1,15 +1,14 @@
 import { createCanvas } from 'canvas';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-let SSTVEncoder, SSTVDecoder;
+let SSTVEncoder: typeof import('../src/utils/SSTVEncoder.js').SSTVEncoder;
+let SSTVDecoder: typeof import('../src/utils/SSTVDecoder.js').SSTVDecoder;
 
 beforeAll(async () => {
-  global.window = {
+  (global as unknown as Record<string, unknown>).window = {
     AudioContext: class {
-      constructor() {
-        this.sampleRate = 48000;
-      }
-      decodeAudioData(arrayBuffer) {
+      sampleRate = 48000;
+      decodeAudioData(arrayBuffer: ArrayBuffer) {
         const view = new DataView(arrayBuffer);
         const numSamples = (arrayBuffer.byteLength - 44) / 2;
         const samples = new Float32Array(numSamples);
@@ -27,22 +26,20 @@ beforeAll(async () => {
     },
   };
 
-  global.document = {
-    createElement: (tag) => {
+  (global as unknown as Record<string, unknown>).document = {
+    createElement: (tag: string) => {
       if (tag === 'canvas') return createCanvas(640, 496);
       return {};
     },
   };
 
-  global.Image = class {
-    constructor() {
-      this.onload = null;
-      this.onerror = null;
-    }
+  (global as unknown as Record<string, unknown>).Image = class {
+    onload: (() => void) | null = null;
+    onerror: ((e: unknown) => void) | null = null;
   };
 
   if (!global.URL) {
-    global.URL = {
+    (global as unknown as Record<string, unknown>).URL = {
       createObjectURL: () => 'mock://image',
       revokeObjectURL: () => undefined,
     };
@@ -82,27 +79,25 @@ describe('Encoder-Decoder Round-Trip', () => {
 
     const { Image } = await import('canvas');
     const img = new Image();
-    await new Promise((resolve, reject) => {
-      img.onload = resolve;
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
       img.onerror = reject;
-      img.src = pngBuffer;
+      img.src = pngBuffer as unknown as string;
     });
 
     const resultCanvas = createCanvas(img.width, img.height);
     const resultCtx = resultCanvas.getContext('2d');
-    resultCtx.drawImage(img, 0, 0);
+    resultCtx.drawImage(img as unknown as CanvasImageSource, 0, 0);
     const resultImageData = resultCtx.getImageData(0, 0, img.width, img.height);
     const pixels = resultImageData.data;
 
-    let sumR = 0,
-      sumG = 0,
-      sumB = 0;
+    let sumR = 0, sumG = 0, sumB = 0;
     const totalPixels = pixels.length / 4;
 
     for (let i = 0; i < pixels.length; i += 4) {
-      sumR += pixels[i];
-      sumG += pixels[i + 1];
-      sumB += pixels[i + 2];
+      sumR += pixels[i] ?? 0;
+      sumG += pixels[i + 1] ?? 0;
+      sumB += pixels[i + 2] ?? 0;
     }
 
     const avgR = sumR / totalPixels;
@@ -123,7 +118,6 @@ describe('Encoder-Decoder Round-Trip', () => {
     expect(avgB).toBeGreaterThan(100);
     expect(avgB).toBeLessThan(150);
 
-    // relaxed for video range quantization
     expect(colorImbalance).toBeLessThan(35);
 
     console.log(`   ✅ Round-trip test PASSED\n`);
@@ -152,27 +146,27 @@ describe('Encoder-Decoder Round-Trip', () => {
     const pngBuffer = Buffer.from(base64Data, 'base64');
     const { Image } = await import('canvas');
     const img = new Image();
-    await new Promise((resolve, reject) => {
-      img.onload = resolve;
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
       img.onerror = reject;
-      img.src = pngBuffer;
+      img.src = pngBuffer as unknown as string;
     });
 
     const resultCanvas = createCanvas(img.width, img.height);
     const resultCtx = resultCanvas.getContext('2d');
-    resultCtx.drawImage(img, 0, 0);
+    resultCtx.drawImage(img as unknown as CanvasImageSource, 0, 0);
     const resultImageData = resultCtx.getImageData(0, 0, img.width, img.height);
     const pixels = resultImageData.data;
 
     const redIdx = (60 * 320 + 80) * 4;
     const blueIdx = (180 * 320 + 240) * 4;
 
-    const redR = pixels[redIdx];
-    const redG = pixels[redIdx + 1];
-    const redB = pixels[redIdx + 2];
-    const blueR = pixels[blueIdx];
-    const blueG = pixels[blueIdx + 1];
-    const blueB = pixels[blueIdx + 2];
+    const redR = pixels[redIdx] ?? 0;
+    const redG = pixels[redIdx + 1] ?? 0;
+    const redB = pixels[redIdx + 2] ?? 0;
+    const blueR = pixels[blueIdx] ?? 0;
+    const blueG = pixels[blueIdx + 1] ?? 0;
+    const blueB = pixels[blueIdx + 2] ?? 0;
 
     console.log(`\n📊 autoCalibrate=true Results:`);
     console.log(`   Red block:  R=${redR}, G=${redG}, B=${redB}`);
@@ -220,58 +214,56 @@ describe('Encoder-Decoder Round-Trip', () => {
 
     const { Image } = await import('canvas');
     const img = new Image();
-    await new Promise((resolve, reject) => {
-      img.onload = resolve;
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
       img.onerror = reject;
-      img.src = pngBuffer;
+      img.src = pngBuffer as unknown as string;
     });
 
     const resultCanvas = createCanvas(img.width, img.height);
     const resultCtx = resultCanvas.getContext('2d');
-    resultCtx.drawImage(img, 0, 0);
+    resultCtx.drawImage(img as unknown as CanvasImageSource, 0, 0);
     const resultImageData = resultCtx.getImageData(0, 0, img.width, img.height);
     const pixels = resultImageData.data;
 
-    const samples = {
+    const samplePoints = {
       red: { x: 80, y: 60 },
       green: { x: 240, y: 60 },
       blue: { x: 80, y: 180 },
       white: { x: 240, y: 180 },
     };
 
-    const results = {};
-    for (const [color, pos] of Object.entries(samples)) {
+    const results: Record<string, { r: number; g: number; b: number }> = {};
+    for (const [color, pos] of Object.entries(samplePoints)) {
       const idx = (pos.y * 320 + pos.x) * 4;
       results[color] = {
-        r: pixels[idx],
-        g: pixels[idx + 1],
-        b: pixels[idx + 2],
+        r: pixels[idx] ?? 0,
+        g: pixels[idx + 1] ?? 0,
+        b: pixels[idx + 2] ?? 0,
       };
     }
 
     console.log(`\n📊 Colored Blocks Results:`);
-    console.log(`   Red block:   R=${results.red.r}, G=${results.red.g}, B=${results.red.b}`);
-    console.log(`   Green block: R=${results.green.r}, G=${results.green.g}, B=${results.green.b}`);
-    console.log(`   Blue block:  R=${results.blue.r}, G=${results.blue.g}, B=${results.blue.b}`);
-    console.log(`   White block: R=${results.white.r}, G=${results.white.g}, B=${results.white.b}`);
+    console.log(`   Red block:   R=${results.red?.r}, G=${results.red?.g}, B=${results.red?.b}`);
+    console.log(`   Green block: R=${results.green?.r}, G=${results.green?.g}, B=${results.green?.b}`);
+    console.log(`   Blue block:  R=${results.blue?.r}, G=${results.blue?.g}, B=${results.blue?.b}`);
+    console.log(`   White block: R=${results.white?.r}, G=${results.white?.g}, B=${results.white?.b}`);
 
-    // SSTV has inherent quality loss due to chroma subsampling
-    expect(results.red.r).toBeGreaterThan(200);
-    expect(results.red.g).toBeLessThan(50);
-    expect(results.red.b).toBeLessThan(50);
+    expect(results.red?.r).toBeGreaterThan(200);
+    expect(results.red?.g).toBeLessThan(50);
+    expect(results.red?.b).toBeLessThan(50);
 
-    // relaxed thresholds due to SSTV chroma resolution limits
-    expect(results.green.g).toBeGreaterThan(150);
-    expect(results.green.r).toBeLessThan(180);
-    expect(results.green.b).toBeLessThan(50);
+    expect(results.green?.g).toBeGreaterThan(150);
+    expect(results.green?.r).toBeLessThan(180);
+    expect(results.green?.b).toBeLessThan(50);
 
-    expect(results.blue.b).toBeGreaterThan(200);
-    expect(results.blue.r).toBeLessThan(50);
-    expect(results.blue.g).toBeLessThan(50);
+    expect(results.blue?.b).toBeGreaterThan(200);
+    expect(results.blue?.r).toBeLessThan(50);
+    expect(results.blue?.g).toBeLessThan(50);
 
-    expect(results.white.r).toBeGreaterThan(200);
-    expect(results.white.g).toBeGreaterThan(200);
-    expect(results.white.b).toBeGreaterThan(200);
+    expect(results.white?.r).toBeGreaterThan(200);
+    expect(results.white?.g).toBeGreaterThan(200);
+    expect(results.white?.b).toBeGreaterThan(200);
 
     console.log(`   ✅ Color blocks test PASSED\n`);
   }, 60000);
@@ -305,22 +297,22 @@ describe('Encoder-Decoder Round-Trip', () => {
 
     const { Image } = await import('canvas');
     const img = new Image();
-    await new Promise((resolve, reject) => {
-      img.onload = resolve;
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
       img.onerror = reject;
-      img.src = pngBuffer;
+      img.src = pngBuffer as unknown as string;
     });
 
     const resultCanvas = createCanvas(img.width, img.height);
     const resultCtx = resultCanvas.getContext('2d');
-    resultCtx.drawImage(img, 0, 0);
+    resultCtx.drawImage(img as unknown as CanvasImageSource, 0, 0);
     const resultImageData = resultCtx.getImageData(0, 0, img.width, img.height);
     const pixels = resultImageData.data;
     const W = img.width;
 
-    const sample = (x, y) => {
+    const sample = (x: number, y: number) => {
       const idx = (y * W + x) * 4;
-      return { r: pixels[idx], g: pixels[idx + 1], b: pixels[idx + 2] };
+      return { r: pixels[idx] ?? 0, g: pixels[idx + 1] ?? 0, b: pixels[idx + 2] ?? 0 };
     };
 
     const red = sample(160, 124);
@@ -332,8 +324,6 @@ describe('Encoder-Decoder Round-Trip', () => {
     console.log(`   Blue block: R=${blue.r}, G=${blue.g}, B=${blue.b}`);
     console.log(`   Gray block: R=${gray.r}, G=${gray.g}, B=${gray.b}`);
 
-    // PD120 uses Y+R-Y/B-Y colour space; expect good colour separation but
-    // some loss is inherent from the analogue FM encoding at 640px/121.6ms.
     expect(red.r).toBeGreaterThan(150);
     expect(red.g).toBeLessThan(80);
     expect(red.b).toBeLessThan(50);

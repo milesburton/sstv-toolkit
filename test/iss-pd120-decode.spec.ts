@@ -1,17 +1,8 @@
-/**
- * Integration test for ISS PD120 SSTV decoding.
- *
- * The ISS transmits PD120 (508ms/line-pair, 640x496) but with a non-standard
- * VIS header — the 1200Hz break is at ~1100Hz and only ~140ms of bit data
- * follows (not the standard 7×30ms = 210ms). The decoder falls back to
- * timing-based mode detection when the VIS code can't be read.
- */
-
 import { readFileSync } from 'node:fs';
 import { createCanvas, Image } from 'canvas';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-function findWavDataOffset(buffer) {
+function findWavDataOffset(buffer: ArrayBuffer): number {
   const view = new DataView(buffer);
   let offset = 12;
   while (offset + 8 <= buffer.byteLength) {
@@ -29,10 +20,9 @@ function findWavDataOffset(buffer) {
 }
 
 class MockAudioContext {
-  constructor() {
-    this.sampleRate = 48000;
-  }
-  decodeAudioData(arrayBuffer) {
+  sampleRate = 48000;
+
+  decodeAudioData(arrayBuffer: ArrayBuffer) {
     const dataOffset = findWavDataOffset(arrayBuffer);
     const view = new DataView(arrayBuffer);
     const numSamples = (arrayBuffer.byteLength - dataOffset) / 2;
@@ -45,17 +35,18 @@ class MockAudioContext {
       getChannelData: () => samples,
     });
   }
+
   close() {
     return Promise.resolve();
   }
 }
 
-let SSTVDecoder;
+let SSTVDecoder: typeof import('../src/utils/SSTVDecoder.js').SSTVDecoder;
 
 beforeAll(async () => {
-  global.window = { AudioContext: MockAudioContext };
-  global.document = {
-    createElement: (tag) => {
+  (global as unknown as Record<string, unknown>).window = { AudioContext: MockAudioContext };
+  (global as unknown as Record<string, unknown>).document = {
+    createElement: (tag: string) => {
       if (tag === 'canvas') return createCanvas(640, 496);
       return {};
     },
@@ -75,42 +66,35 @@ describe('ISS PD120 Decode Test', () => {
     };
 
     const decoder = new SSTVDecoder(48000);
-    const decoded = await decoder.decodeAudio(blob);
+    const decoded = await decoder.decodeAudio(blob as Blob);
     const result = typeof decoded === 'string' ? decoded : decoded.imageUrl;
 
     expect(result).toBeDefined();
     expect(result).toMatch(/^data:image\/png;base64,/);
 
-    // ISS PD120 files have non-standard VIS headers; the decoder may fall back
-    // to timing-based detection (→ PD 120) or to Robot 36 if the noise in the
-    // first 12s generates a plausible false VIS. Either way the image should not
-    // be severely colour-corrupted.
-    console.log(`   Mode detected: ${decoder.mode.name}`);
+    console.log(`   Mode detected: ${decoder.mode?.name}`);
 
-    // Analyse decoded image for colour sanity
     const base64Data = result.replace(/^data:image\/png;base64,/, '');
     const imgBuffer = Buffer.from(base64Data, 'base64');
 
     const img = new Image();
-    await new Promise((resolve, reject) => {
-      img.onload = resolve;
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
       img.onerror = reject;
-      img.src = imgBuffer;
+      img.src = imgBuffer as unknown as string;
     });
 
     const canvas = createCanvas(img.width, img.height);
     const ctx = canvas.getContext('2d');
-    ctx.drawImage(img, 0, 0);
+    ctx.drawImage(img as unknown as CanvasImageSource, 0, 0);
     const { data: pixels } = ctx.getImageData(0, 0, img.width, img.height);
 
-    let avgR = 0,
-      avgG = 0,
-      avgB = 0;
+    let avgR = 0, avgG = 0, avgB = 0;
     const totalPixels = pixels.length / 4;
     for (let i = 0; i < pixels.length; i += 4) {
-      avgR += pixels[i];
-      avgG += pixels[i + 1];
-      avgB += pixels[i + 2];
+      avgR += pixels[i] ?? 0;
+      avgG += pixels[i + 1] ?? 0;
+      avgB += pixels[i + 2] ?? 0;
     }
     avgR /= totalPixels;
     avgG /= totalPixels;
