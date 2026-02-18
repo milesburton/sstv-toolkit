@@ -26,7 +26,19 @@ const AudioIcon = () => (
   </svg>
 );
 
-function decodeWithWorker(buffer: ArrayBuffer): Promise<WorkerOutboundMessage> {
+async function decodeAudioBuffer(buffer: ArrayBuffer): Promise<{ samples: Float32Array; sampleRate: number }> {
+  const AudioCtx = window.AudioContext ?? (window as unknown as Record<string, typeof AudioContext>).webkitAudioContext;
+  if (!AudioCtx) throw new Error('Web Audio API is not available in this browser.');
+  const ctx = new AudioCtx();
+  try {
+    const audioBuffer = await ctx.decodeAudioData(buffer);
+    return { samples: audioBuffer.getChannelData(0), sampleRate: audioBuffer.sampleRate };
+  } finally {
+    await ctx.close();
+  }
+}
+
+function decodeWithWorker(samples: Float32Array, sampleRate: number): Promise<WorkerOutboundMessage> {
   return new Promise((resolve) => {
     const worker = new Worker(new URL('../workers/decoderWorker.ts', import.meta.url), {
       type: 'module',
@@ -39,7 +51,7 @@ function decodeWithWorker(buffer: ArrayBuffer): Promise<WorkerOutboundMessage> {
       worker.terminate();
       resolve({ type: 'error', message: event.message ?? 'Worker error' });
     };
-    worker.postMessage({ type: 'decode', buffer }, [buffer]);
+    worker.postMessage({ type: 'decode', samples, sampleRate }, [samples.buffer]);
   });
 }
 
@@ -65,7 +77,8 @@ export function DecoderPanel({ triggerUrl, onTriggerConsumed, onResult, onError,
       onReset();
       try {
         const buffer = await file.arrayBuffer();
-        const msg = await decodeWithWorker(buffer);
+        const { samples, sampleRate } = await decodeAudioBuffer(buffer);
+        const msg = await decodeWithWorker(samples, sampleRate);
 
         if (msg.type === 'error') {
           onError(msg.message);

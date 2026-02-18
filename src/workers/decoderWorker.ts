@@ -1,11 +1,12 @@
 import type { WorkerDecodeRequest, WorkerOutboundMessage } from '../types.js';
 import { SSTVDecoder } from '../utils/SSTVDecoder.js';
 
-self.onmessage = async (event: MessageEvent<WorkerDecodeRequest>) => {
-  const { buffer } = event.data;
+self.onmessage = (event: MessageEvent<WorkerDecodeRequest>) => {
+  const { samples, sampleRate } = event.data;
 
   try {
-    const result = await new SSTVDecoder().decodeAudioBuffer(buffer);
+    const decoder = new SSTVDecoder(sampleRate);
+    const result = decoder.decodeSamples(samples);
 
     const msg: WorkerOutboundMessage = {
       type: 'result',

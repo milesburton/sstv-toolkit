@@ -47,7 +47,8 @@ export interface DecodeImageResult {
 
 export interface WorkerDecodeRequest {
   type: 'decode';
-  buffer: ArrayBuffer;
+  samples: Float32Array;
+  sampleRate: number;
 }
 
 export interface WorkerResultMessage {

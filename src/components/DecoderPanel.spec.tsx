@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { WorkerOutboundMessage } from '../types.js';
+import type { WorkerDecodeRequest, WorkerOutboundMessage } from '../types.js';
 
 const GOOD_PIXELS = new Uint8ClampedArray(320 * 240 * 4).fill(128);
 
@@ -31,6 +31,7 @@ const GOOD_RESULT: WorkerOutboundMessage = {
 
 let nextWorkerResult: WorkerOutboundMessage = GOOD_RESULT;
 const workerConstructorArgs: ConstructorParameters<typeof Worker>[] = [];
+const workerPostMessageArgs: WorkerDecodeRequest[] = [];
 
 function makeMockWorker() {
   let messageHandler: ((event: MessageEvent<WorkerOutboundMessage>) => void) | null = null;
@@ -44,7 +45,8 @@ function makeMockWorker() {
     set onerror(_handler: (event: ErrorEvent) => void) {
       /* intentional no-op */
     }
-    postMessage(_data: unknown, _transfer?: Transferable[]) {
+    postMessage(data: WorkerDecodeRequest, _transfer?: Transferable[]) {
+      workerPostMessageArgs.push(data);
       const result = nextWorkerResult;
       Promise.resolve().then(() => {
         messageHandler?.({ data: result } as MessageEvent<WorkerOutboundMessage>);
@@ -52,6 +54,22 @@ function makeMockWorker() {
     }
     terminate() {
       /* intentional no-op */
+    }
+  };
+}
+
+function makeMockAudioContext(sampleRate = 48000) {
+  return class MockAudioContext {
+    sampleRate = sampleRate;
+    decodeAudioData(_buffer: ArrayBuffer) {
+      const samples = new Float32Array(sampleRate); // 1s of silence
+      return Promise.resolve({
+        sampleRate,
+        getChannelData: (_ch: number) => samples,
+      });
+    }
+    close() {
+      return Promise.resolve();
     }
   };
 }
@@ -64,7 +82,9 @@ describe('DecoderPanel', () => {
   beforeEach(() => {
     nextWorkerResult = GOOD_RESULT;
     workerConstructorArgs.length = 0;
+    workerPostMessageArgs.length = 0;
     vi.stubGlobal('Worker', makeMockWorker());
+    vi.stubGlobal('AudioContext', makeMockAudioContext());
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue({
@@ -194,5 +214,74 @@ describe('DecoderPanel', () => {
     const [scriptUrl] = workerConstructorArgs[0] ?? [];
     expect(scriptUrl).toBeInstanceOf(URL);
     expect((scriptUrl as URL).href).toMatch(/decoderWorker/);
+  });
+
+  it('posts samples and sampleRate to worker (not a raw buffer)', async () => {
+    render(
+      <DecoderPanel
+        triggerUrl="examples/iss-test.wav"
+        onResult={noop}
+        onError={noop}
+        onReset={noop}
+      />
+    );
+
+    await waitFor(() => {
+      expect(workerPostMessageArgs.length).toBeGreaterThan(0);
+    });
+
+    const msg = workerPostMessageArgs[0];
+    expect(msg?.type).toBe('decode');
+    expect(msg?.samples).toBeInstanceOf(Float32Array);
+    expect(msg?.sampleRate).toBe(48000);
+  });
+
+  it('decodes MP3 files via AudioContext on the main thread', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        blob: () => Promise.resolve(new Blob(['mp3data'], { type: 'audio/mpeg' })),
+      })
+    );
+    const onResult = vi.fn();
+    render(
+      <DecoderPanel
+        triggerUrl="examples/space-comms.mp3"
+        onResult={onResult}
+        onError={noop}
+        onReset={noop}
+      />
+    );
+
+    await waitFor(() => {
+      expect(onResult).toHaveBeenCalledWith(
+        expect.objectContaining({ url: expect.stringMatching(/^data:image\/png;base64,/) })
+      );
+    });
+
+    // Confirm worker received samples, not a buffer
+    const msg = workerPostMessageArgs[0];
+    expect(msg?.samples).toBeInstanceOf(Float32Array);
+    expect(msg?.sampleRate).toBe(48000);
+  });
+
+  it('calls onError when AudioContext.decodeAudioData rejects', async () => {
+    vi.stubGlobal('AudioContext', class {
+      decodeAudioData() { return Promise.reject(new Error('decode failed')); }
+      close() { return Promise.resolve(); }
+    });
+    const onError = vi.fn();
+    render(
+      <DecoderPanel
+        triggerUrl="examples/iss-test.wav"
+        onResult={noop}
+        onError={onError}
+        onReset={noop}
+      />
+    );
+
+    await waitFor(() => {
+      expect(onError).toHaveBeenCalledWith('decode failed');
+    });
   });
 });

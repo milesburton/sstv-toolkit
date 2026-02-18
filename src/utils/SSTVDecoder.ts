@@ -111,8 +111,6 @@ export class SSTVDecoder {
         this.sampleRate = audioBuffer.sampleRate;
         return this.decodeSamples(samples);
       } catch (err) {
-        // decodeAudioData transfers (detaches) the buffer on failure in some browsers,
-        // so we captured isWAV() before the call above.
         if (!wav) throw err;
       }
     }
