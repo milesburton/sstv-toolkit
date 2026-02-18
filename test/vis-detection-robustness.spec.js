@@ -37,10 +37,19 @@ function addTone(samples, frequency, duration, phase = { value: 0 }) {
 function samplesToWavBlob(samples) {
   const buffer = new ArrayBuffer(44 + samples.length * 2);
   const view = new DataView(buffer);
-  view.setUint8(0, 0x52); view.setUint8(1, 0x49); view.setUint8(2, 0x46); view.setUint8(3, 0x46);
+  view.setUint8(0, 0x52);
+  view.setUint8(1, 0x49);
+  view.setUint8(2, 0x46);
+  view.setUint8(3, 0x46);
   view.setUint32(4, 36 + samples.length * 2, true);
-  view.setUint8(8, 0x57); view.setUint8(9, 0x41); view.setUint8(10, 0x56); view.setUint8(11, 0x45);
-  view.setUint8(12, 0x66); view.setUint8(13, 0x6d); view.setUint8(14, 0x74); view.setUint8(15, 0x20);
+  view.setUint8(8, 0x57);
+  view.setUint8(9, 0x41);
+  view.setUint8(10, 0x56);
+  view.setUint8(11, 0x45);
+  view.setUint8(12, 0x66);
+  view.setUint8(13, 0x6d);
+  view.setUint8(14, 0x74);
+  view.setUint8(15, 0x20);
   view.setUint32(16, 16, true);
   view.setUint16(20, 1, true);
   view.setUint16(22, 1, true);
@@ -48,7 +57,10 @@ function samplesToWavBlob(samples) {
   view.setUint32(28, SAMPLE_RATE * 2, true);
   view.setUint16(32, 2, true);
   view.setUint16(34, 16, true);
-  view.setUint8(36, 0x64); view.setUint8(37, 0x61); view.setUint8(38, 0x74); view.setUint8(39, 0x61);
+  view.setUint8(36, 0x64);
+  view.setUint8(37, 0x61);
+  view.setUint8(38, 0x74);
+  view.setUint8(39, 0x61);
   view.setUint32(40, samples.length * 2, true);
   let offset = 44;
   for (const s of samples) {
@@ -85,7 +97,7 @@ function buildRobot36Signal(imageData, opts = {}) {
   if (falseGlitch) {
     // Two leader segments separated by a short 1200Hz glitch, like the ISS transmitter
     addTone(samples, 1900 + o, leaderDuration / 2, phase);
-    addTone(samples, 1200 + o, 0.008, phase);           // false 8ms glitch
+    addTone(samples, 1200 + o, 0.008, phase); // false 8ms glitch
     addTone(samples, 1900 + o, leaderDuration / 2, phase);
   } else {
     addTone(samples, 1900 + o, leaderDuration, phase);
@@ -144,7 +156,9 @@ function buildRobot36Signal(imageData, opts = {}) {
       const startSample = Math.floor((x / halfWidth) * chromaScanSamples);
       const endSample = Math.floor(((x + 1) / halfWidth) * chromaScanSamples);
       const i0 = (y * width + x * 2) * 4;
-      const r = data[i0], g = data[i0 + 1], b = data[i0 + 2];
+      const r = data[i0],
+        g = data[i0 + 1],
+        b = data[i0 + 2];
       const Yv = 0.299 * r + 0.587 * g + 0.114 * b;
       let chromaVal;
       if (isEvenLine) {
@@ -177,7 +191,9 @@ let SSTVDecoder;
 beforeAll(async () => {
   global.window = {
     AudioContext: class {
-      constructor() { this.sampleRate = SAMPLE_RATE; }
+      constructor() {
+        this.sampleRate = SAMPLE_RATE;
+      }
       decodeAudioData(arrayBuffer) {
         const view = new DataView(arrayBuffer);
         const numSamples = (arrayBuffer.byteLength - 44) / 2;
@@ -190,7 +206,9 @@ beforeAll(async () => {
           getChannelData: () => samples,
         });
       }
-      close() { return Promise.resolve(); }
+      close() {
+        return Promise.resolve();
+      }
     },
   };
 
@@ -209,10 +227,14 @@ function makeTestImage() {
   const canvas = createCanvas(320, 240);
   const ctx = canvas.getContext('2d');
   // Four distinct color blocks for easy validation
-  ctx.fillStyle = 'rgb(255, 0, 0)';   ctx.fillRect(0,   0,   160, 120);
-  ctx.fillStyle = 'rgb(0,   0, 255)'; ctx.fillRect(160, 0,   160, 120);
-  ctx.fillStyle = 'rgb(0, 255,   0)'; ctx.fillRect(0,   120, 160, 120);
-  ctx.fillStyle = 'rgb(255, 255, 255)'; ctx.fillRect(160, 120, 160, 120);
+  ctx.fillStyle = 'rgb(255, 0, 0)';
+  ctx.fillRect(0, 0, 160, 120);
+  ctx.fillStyle = 'rgb(0,   0, 255)';
+  ctx.fillRect(160, 0, 160, 120);
+  ctx.fillStyle = 'rgb(0, 255,   0)';
+  ctx.fillRect(0, 120, 160, 120);
+  ctx.fillStyle = 'rgb(255, 255, 255)';
+  ctx.fillRect(160, 120, 160, 120);
   return ctx.getImageData(0, 0, 320, 240);
 }
 
@@ -243,17 +265,16 @@ async function decodeBlob(blob) {
 
   return {
     diagnostics,
-    topLeft:     sample(80,  60),   // red
-    topRight:    sample(240, 60),   // blue
-    bottomLeft:  sample(80,  180),  // green
-    bottomRight: sample(240, 180),  // white
+    topLeft: sample(80, 60), // red
+    topRight: sample(240, 60), // blue
+    bottomLeft: sample(80, 180), // green
+    bottomRight: sample(240, 180), // white
   };
 }
 
 // --- Tests ---
 
 describe('VIS Detection Robustness', () => {
-
   describe('Scenario 1: VIS header starts late in the recording', () => {
     it('should detect VIS and decode correctly when preceded by 10s of silence', async () => {
       const imageData = makeTestImage();

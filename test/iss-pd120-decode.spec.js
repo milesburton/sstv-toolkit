@@ -85,7 +85,9 @@ describe('ISS PD120 Decode Test', () => {
     ctx.drawImage(img, 0, 0);
     const { data: pixels } = ctx.getImageData(0, 0, img.width, img.height);
 
-    let avgR = 0, avgG = 0, avgB = 0;
+    let avgR = 0,
+      avgG = 0,
+      avgB = 0;
     const totalPixels = pixels.length / 4;
     for (let i = 0; i < pixels.length; i += 4) {
       avgR += pixels[i];

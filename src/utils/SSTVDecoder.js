@@ -58,8 +58,16 @@ export class SSTVDecoder {
         if (i < Math.floor(0.25 * this.sampleRate)) continue;
         {
           const expectedLeader = 1900 + (breakFreq - 1200);
-          const f1 = this.detectFrequency(samples, Math.max(0, i - Math.floor(0.2 * this.sampleRate)), 0.02);
-          const f2 = this.detectFrequency(samples, Math.max(0, i - Math.floor(0.1 * this.sampleRate)), 0.02);
+          const f1 = this.detectFrequency(
+            samples,
+            Math.max(0, i - Math.floor(0.2 * this.sampleRate)),
+            0.02
+          );
+          const f2 = this.detectFrequency(
+            samples,
+            Math.max(0, i - Math.floor(0.1 * this.sampleRate)),
+            0.02
+          );
           if (Math.abs(f1 - expectedLeader) > 200 || Math.abs(f2 - expectedLeader) > 200) continue;
         }
 

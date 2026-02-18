@@ -441,7 +441,11 @@ function App() {
                     <a href="examples/iss-test.wav" download className="example-link">
                       ISS Robot 36 (.wav)
                     </a>
-                    <a href="examples/Space_Comms_PD120_SSTV_Test_Recording.mp3" download className="example-link">
+                    <a
+                      href="examples/Space_Comms_PD120_SSTV_Test_Recording.mp3"
+                      download
+                      className="example-link"
+                    >
                       ISS PD120 (.mp3)
                     </a>
                     <a href="examples/test-colorbars.wav" download className="example-link">
