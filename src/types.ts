@@ -38,6 +38,23 @@ export interface DecodeResult {
   diagnostics: DecodeDiagnostics;
 }
 
+export interface EncodeResult {
+  url: string;
+  filename: string;
+  mode: string;
+  width: number;
+  lines: number;
+  colorFormat: string;
+  expectedDuration: string;
+  fileSize: string;
+}
+
+export interface DecodeState {
+  url: string;
+  filename: string;
+  diagnostics: DecodeDiagnostics;
+}
+
 export interface GalleryEntry {
   name: string;
   audioFile: string;

@@ -1,16 +1,12 @@
 import { useState } from 'react';
+import type { EncodeResult } from '../types.js';
 import { SSTV_MODES, SSTVEncoder } from '../utils/SSTVEncoder.js';
 import { DropZone } from './DropZone.js';
 
-interface EncodeResult {
-  url: string;
-  filename: string;
-  mode: string;
-  width: number;
-  lines: number;
-  colorFormat: string;
-  expectedDuration: string;
-  fileSize: string;
+interface Props {
+  onResult: (result: EncodeResult) => void;
+  onError: (msg: string) => void;
+  onReset: () => void;
 }
 
 const ImageIcon = () => (
@@ -29,32 +25,23 @@ const ImageIcon = () => (
   </svg>
 );
 
-export function EncoderPanel() {
+export function EncoderPanel({ onResult, onError, onReset }: Props) {
   const [selectedMode, setSelectedMode] = useState('ROBOT36');
   const [processing, setProcessing] = useState(false);
-  const [result, setResult] = useState<EncodeResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
 
   const handleFile = async (file: File) => {
     if (!file.type.startsWith('image/')) {
-      setError('Please select an image file (JPG, PNG, etc.)');
+      onError('Please select an image file (JPG, PNG, etc.)');
       return;
     }
     setProcessing(true);
-    setError(null);
-    setResult(null);
-
-    const reader = new FileReader();
-    reader.onload = (e) => setPreview(e.target?.result as string);
-    reader.readAsDataURL(file);
-
+    onReset();
     try {
       const encoder = new SSTVEncoder(selectedMode);
       const blob = await encoder.encodeImage(file);
       const mode = SSTV_MODES[selectedMode];
       if (!mode) throw new Error(`Unknown mode: ${selectedMode}`);
-      setResult({
+      onResult({
         url: URL.createObjectURL(blob),
         filename: `sstv_${selectedMode.toLowerCase()}_${Date.now()}.wav`,
         mode: mode.name,
@@ -65,24 +52,10 @@ export function EncoderPanel() {
         fileSize: `${(blob.size / 1024).toFixed(0)} KB`,
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Encoding failed');
+      onError(err instanceof Error ? err.message : 'Encoding failed');
     } finally {
       setProcessing(false);
     }
-  };
-
-  const download = () => {
-    if (!result) return;
-    const a = document.createElement('a');
-    a.href = result.url;
-    a.download = result.filename;
-    a.click();
-  };
-
-  const reset = () => {
-    setResult(null);
-    setError(null);
-    setPreview(null);
   };
 
   return (
@@ -121,60 +94,6 @@ export function EncoderPanel() {
         hint=""
         inputId="encode-input"
       />
-
-      {preview && !result && (
-        <div className="my-4 text-center">
-          <img src={preview} alt="Preview" className="max-w-full max-h-48 rounded-lg opacity-90" />
-        </div>
-      )}
-
-      {error && (
-        <div className="border border-red-500/30 bg-red-500/10 rounded-lg p-3 my-4 text-red-400 text-center text-sm">
-          {error}
-        </div>
-      )}
-
-      {result && (
-        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-5 mt-4">
-          <h3 className="text-emerald-400 mb-4 text-sm font-semibold text-center uppercase tracking-wider">
-            Encoded successfully
-          </h3>
-          <audio controls src={result.url} className="w-full mb-4 opacity-80" />
-          <div className="flex gap-3 justify-center mt-4">
-            <button
-              onClick={download}
-              className="px-5 py-2 text-sm font-semibold bg-emerald-600 text-white rounded-lg hover:bg-emerald-500 hover:-translate-y-0.5 transition-all"
-            >
-              Download WAV
-            </button>
-            <button
-              onClick={reset}
-              className="px-5 py-2 text-sm font-semibold bg-white/10 text-white/70 rounded-lg hover:bg-white/15 transition-all"
-            >
-              Encode Another
-            </button>
-          </div>
-          <div className="mt-4 border border-white/10 rounded-lg overflow-hidden text-xs">
-            <div className="px-3 py-2 bg-white/[0.04] text-white/40 text-xs font-semibold uppercase tracking-wider">
-              Encode Info
-            </div>
-            <div className="p-3 diag-grid text-xs">
-              <span className="text-white/35">Mode</span>
-              <span className="font-mono text-white/70">{result.mode}</span>
-              <span className="text-white/35">Resolution</span>
-              <span className="font-mono text-white/70">
-                {result.width}×{result.lines}
-              </span>
-              <span className="text-white/35">Color</span>
-              <span className="font-mono text-white/70">{result.colorFormat}</span>
-              <span className="text-white/35">Duration</span>
-              <span className="font-mono text-white/70">{result.expectedDuration}</span>
-              <span className="text-white/35">File size</span>
-              <span className="font-mono text-white/70">{result.fileSize}</span>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

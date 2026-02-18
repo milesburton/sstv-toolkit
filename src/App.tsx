@@ -1,7 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { DecoderPanel } from './components/DecoderPanel.js';
+import { DiagnosticsPanel } from './components/DiagnosticsPanel.js';
 import { EncoderPanel } from './components/EncoderPanel.js';
 import { GalleryPanel } from './components/GalleryPanel.js';
+import { QualityBadge } from './components/QualityBadge.js';
+import type { DecodeState, EncodeResult } from './types.js';
 
 function useStarfield() {
   useEffect(() => {
@@ -58,7 +61,65 @@ function useStarfield() {
 
 export default function App() {
   const [decodeUrl, setDecodeUrl] = useState<string | null>(null);
+  const [encodeResult, setEncodeResult] = useState<EncodeResult | null>(null);
+  const [decodeResult, setDecodeResult] = useState<DecodeState | null>(null);
+  const [encodeError, setEncodeError] = useState<string | null>(null);
+  const [decodeError, setDecodeError] = useState<string | null>(null);
+  const resultsRef = useRef<HTMLDivElement>(null);
   useStarfield();
+
+  const scrollToResults = useCallback(() => {
+    setTimeout(() => {
+      resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
+  }, []);
+
+  const handleEncodeResult = useCallback(
+    (result: EncodeResult) => {
+      setEncodeResult(result);
+      setEncodeError(null);
+      scrollToResults();
+    },
+    [scrollToResults]
+  );
+
+  const handleDecodeResult = useCallback(
+    (result: DecodeState) => {
+      setDecodeResult(result);
+      setDecodeError(null);
+      scrollToResults();
+    },
+    [scrollToResults]
+  );
+
+  const downloadEncode = () => {
+    if (!encodeResult) return;
+    const a = document.createElement('a');
+    a.href = encodeResult.url;
+    a.download = encodeResult.filename;
+    a.click();
+  };
+
+  const downloadDecode = () => {
+    if (!decodeResult) return;
+    const a = document.createElement('a');
+    a.href = decodeResult.url;
+    a.download = decodeResult.filename;
+    a.click();
+  };
+
+  const resetEncode = useCallback(() => {
+    setEncodeResult(null);
+    setEncodeError(null);
+  }, []);
+
+  const resetDecode = useCallback(() => {
+    setDecodeResult(null);
+    setDecodeError(null);
+  }, []);
+
+  const hasResults = encodeResult ?? decodeResult ?? encodeError ?? decodeError;
+  const verdict = decodeResult?.diagnostics?.quality?.verdict;
 
   return (
     <>
@@ -75,12 +136,134 @@ export default function App() {
 
         <main className="glass rounded-2xl p-8 mb-6 grid grid-cols-1 lg:grid-cols-2 gap-0">
           <div className="pr-0 lg:pr-8 lg:border-r border-white/10">
-            <EncoderPanel />
+            <EncoderPanel
+              onResult={handleEncodeResult}
+              onError={(msg) => {
+                setEncodeError(msg);
+                setEncodeResult(null);
+                scrollToResults();
+              }}
+              onReset={resetEncode}
+            />
           </div>
           <div className="pl-0 lg:pl-8 pt-8 lg:pt-0">
-            <DecoderPanel triggerUrl={decodeUrl} onTriggerConsumed={() => setDecodeUrl(null)} />
+            <DecoderPanel
+              triggerUrl={decodeUrl}
+              onTriggerConsumed={() => setDecodeUrl(null)}
+              onResult={handleDecodeResult}
+              onError={(msg) => {
+                setDecodeError(msg);
+                setDecodeResult(null);
+                scrollToResults();
+              }}
+              onReset={resetDecode}
+            />
           </div>
         </main>
+
+        {hasResults && (
+          <div
+            ref={resultsRef}
+            className="glass rounded-2xl p-8 mb-6 grid grid-cols-1 lg:grid-cols-2 gap-0"
+          >
+            <div className="pr-0 lg:pr-8 lg:border-r border-white/10">
+              <div className="text-center mb-5 pb-4 border-b border-white/10">
+                <h2 className="text-white text-base font-semibold tracking-wide">Encoded</h2>
+              </div>
+              {encodeError && (
+                <div className="border border-red-500/30 bg-red-500/10 rounded-lg p-3 text-red-400 text-center text-sm">
+                  {encodeError}
+                </div>
+              )}
+              {encodeResult && (
+                <>
+                  <p className="text-emerald-400 text-sm font-semibold text-center uppercase tracking-wider mb-4">
+                    Encoded successfully
+                  </p>
+                  <audio controls src={encodeResult.url} className="w-full mb-4 opacity-80" />
+                  <div className="flex gap-3 justify-center mb-4">
+                    <button
+                      onClick={downloadEncode}
+                      className="px-5 py-2 text-sm font-semibold bg-emerald-600 text-white rounded-lg hover:bg-emerald-500 hover:-translate-y-0.5 transition-all"
+                    >
+                      Download WAV
+                    </button>
+                    <button
+                      onClick={resetEncode}
+                      className="px-5 py-2 text-sm font-semibold bg-white/10 text-white/70 rounded-lg hover:bg-white/15 transition-all"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <div className="border border-white/10 rounded-lg overflow-hidden text-xs">
+                    <div className="px-3 py-2 bg-white/4 text-white/40 text-xs font-semibold uppercase tracking-wider">
+                      Encode Info
+                    </div>
+                    <div className="p-3 diag-grid text-xs">
+                      <span className="text-white/35">Mode</span>
+                      <span className="font-mono text-white/70">{encodeResult.mode}</span>
+                      <span className="text-white/35">Resolution</span>
+                      <span className="font-mono text-white/70">
+                        {encodeResult.width}×{encodeResult.lines}
+                      </span>
+                      <span className="text-white/35">Color</span>
+                      <span className="font-mono text-white/70">{encodeResult.colorFormat}</span>
+                      <span className="text-white/35">Duration</span>
+                      <span className="font-mono text-white/70">
+                        {encodeResult.expectedDuration}
+                      </span>
+                      <span className="text-white/35">File size</span>
+                      <span className="font-mono text-white/70">{encodeResult.fileSize}</span>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="pl-0 lg:pl-8 pt-8 lg:pt-0">
+              <div className="text-center mb-5 pb-4 border-b border-white/10">
+                <h2 className="text-white text-base font-semibold tracking-wide">Decoded</h2>
+              </div>
+              {decodeError && (
+                <div className="border border-red-500/30 bg-red-500/10 rounded-lg p-3 text-red-400 text-center text-sm">
+                  {decodeError}
+                </div>
+              )}
+              {decodeResult && (
+                <>
+                  <h3 className="mb-4 text-sm font-semibold text-center uppercase tracking-wider">
+                    <span className={verdict === 'bad' ? 'text-red-400' : 'text-emerald-400'}>
+                      {verdict === 'bad' ? 'Decoded (quality issues)' : 'Decoded successfully'}
+                    </span>
+                    <QualityBadge verdict={verdict} />
+                  </h3>
+                  <img
+                    src={decodeResult.url}
+                    alt="Decoded SSTV"
+                    className="max-w-full h-auto rounded-lg block mx-auto mb-4 opacity-95"
+                  />
+                  <div className="flex gap-3 justify-center mb-4">
+                    <button
+                      onClick={downloadDecode}
+                      className="px-5 py-2 text-sm font-semibold bg-emerald-600 text-white rounded-lg hover:bg-emerald-500 hover:-translate-y-0.5 transition-all"
+                    >
+                      Download PNG
+                    </button>
+                    <button
+                      onClick={resetDecode}
+                      className="px-5 py-2 text-sm font-semibold bg-white/10 text-white/70 rounded-lg hover:bg-white/15 transition-all"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  {decodeResult.diagnostics && (
+                    <DiagnosticsPanel diagnostics={decodeResult.diagnostics} />
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        )}
 
         <GalleryPanel onTryDecode={setDecodeUrl} />
 

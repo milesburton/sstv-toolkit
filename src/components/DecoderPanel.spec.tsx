@@ -33,6 +33,8 @@ const GOOD_RESULT = {
   },
 };
 
+const noop = vi.fn();
+
 describe('DecoderPanel', () => {
   beforeEach(() => {
     mockDecodeAudio.mockResolvedValue(GOOD_RESULT);
@@ -51,7 +53,7 @@ describe('DecoderPanel', () => {
   });
 
   it('renders the drop zone by default', () => {
-    render(<DecoderPanel />);
+    render(<DecoderPanel onResult={noop} onError={noop} onReset={noop} />);
     expect(screen.getByText(/SSTV Audio → Image/i)).toBeInTheDocument();
     expect(document.querySelector('input[type="file"]')).toBeInTheDocument();
   });
@@ -59,7 +61,13 @@ describe('DecoderPanel', () => {
   it('calls onTriggerConsumed after triggerUrl decode completes', async () => {
     const onTriggerConsumed = vi.fn();
     render(
-      <DecoderPanel triggerUrl="examples/iss-test.wav" onTriggerConsumed={onTriggerConsumed} />
+      <DecoderPanel
+        triggerUrl="examples/iss-test.wav"
+        onTriggerConsumed={onTriggerConsumed}
+        onResult={noop}
+        onError={noop}
+        onReset={noop}
+      />
     );
 
     await waitFor(() => {
@@ -67,24 +75,31 @@ describe('DecoderPanel', () => {
     });
   });
 
-  it('shows decoded image after triggerUrl resolves', async () => {
-    render(<DecoderPanel triggerUrl="examples/iss-test.wav" />);
+  it('calls onResult with decoded data after triggerUrl resolves', async () => {
+    const onResult = vi.fn();
+    render(
+      <DecoderPanel
+        triggerUrl="examples/iss-test.wav"
+        onResult={onResult}
+        onError={noop}
+        onReset={noop}
+      />
+    );
 
     await waitFor(() => {
-      expect(screen.getByAltText('Decoded SSTV')).toBeInTheDocument();
-    });
-  });
-
-  it('shows success message after successful decode via triggerUrl', async () => {
-    render(<DecoderPanel triggerUrl="examples/iss-test.wav" />);
-
-    await waitFor(() => {
-      expect(screen.getByText(/Decoded Successfully/i)).toBeInTheDocument();
+      expect(onResult).toHaveBeenCalledWith(expect.objectContaining({ url: GOOD_RESULT.imageUrl }));
     });
   });
 
   it('scrolls into view when triggerUrl is set', async () => {
-    render(<DecoderPanel triggerUrl="examples/iss-test.wav" />);
+    render(
+      <DecoderPanel
+        triggerUrl="examples/iss-test.wav"
+        onResult={noop}
+        onError={noop}
+        onReset={noop}
+      />
+    );
 
     await waitFor(() => {
       expect(Element.prototype.scrollIntoView).toHaveBeenCalledWith({
@@ -94,17 +109,25 @@ describe('DecoderPanel', () => {
     });
   });
 
-  it('shows error message when fetch fails for triggerUrl', async () => {
+  it('calls onError when fetch fails for triggerUrl', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Network error')));
-    render(<DecoderPanel triggerUrl="examples/bad.wav" />);
+    const onError = vi.fn();
+    render(
+      <DecoderPanel
+        triggerUrl="examples/bad.wav"
+        onResult={noop}
+        onError={onError}
+        onReset={noop}
+      />
+    );
 
     await waitFor(() => {
-      expect(screen.getByText(/Network error/i)).toBeInTheDocument();
+      expect(onError).toHaveBeenCalledWith('Network error');
     });
   });
 
   it('does not auto-decode when triggerUrl is null', () => {
-    render(<DecoderPanel triggerUrl={null} />);
+    render(<DecoderPanel triggerUrl={null} onResult={noop} onError={noop} onReset={noop} />);
     expect(mockDecodeAudio).not.toHaveBeenCalled();
     expect(fetch).not.toHaveBeenCalled();
   });

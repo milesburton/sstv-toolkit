@@ -1,19 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { DecodeResult } from '../types.js';
+import type { DecodeState } from '../types.js';
 import { SSTVDecoder } from '../utils/SSTVDecoder.js';
-import { DiagnosticsPanel } from './DiagnosticsPanel.js';
 import { DropZone } from './DropZone.js';
-import { QualityBadge } from './QualityBadge.js';
-
-interface DecodeState {
-  url: string;
-  filename: string;
-  diagnostics: DecodeResult['diagnostics'];
-}
 
 interface Props {
   triggerUrl?: string | null;
   onTriggerConsumed?: () => void;
+  onResult: (result: DecodeState) => void;
+  onError: (msg: string) => void;
+  onReset: () => void;
 }
 
 const AudioIcon = () => (
@@ -32,36 +27,46 @@ const AudioIcon = () => (
   </svg>
 );
 
-export function DecoderPanel({ triggerUrl, onTriggerConsumed }: Props) {
+export function DecoderPanel({ triggerUrl, onTriggerConsumed, onResult, onError, onReset }: Props) {
   const [processing, setProcessing] = useState(false);
-  const [result, setResult] = useState<DecodeState | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
-  const decodeUrl = useCallback(
-    async (url: string) => {
+  const runDecode = useCallback(
+    async (file: File) => {
       setProcessing(true);
-      setError(null);
-      setResult(null);
+      onReset();
       try {
-        const response = await fetch(url);
-        const blob = await response.blob();
-        const file = new File([blob], url.split('/').pop() ?? 'audio', { type: blob.type });
         const decoder = new SSTVDecoder();
         const decoded = await decoder.decodeAudio(file);
-        setResult({
+        onResult({
           url: decoded.imageUrl,
           filename: `sstv_decoded_${Date.now()}.png`,
           diagnostics: decoded.diagnostics,
         });
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Decoding failed');
+        onError(err instanceof Error ? err.message : 'Decoding failed');
       } finally {
         setProcessing(false);
+      }
+    },
+    [onResult, onError, onReset]
+  );
+
+  const decodeUrl = useCallback(
+    async (url: string) => {
+      try {
+        const response = await fetch(url);
+        const blob = await response.blob();
+        const file = new File([blob], url.split('/').pop() ?? 'audio', { type: blob.type });
+        await runDecode(file);
+      } catch (err) {
+        onError(err instanceof Error ? err.message : 'Decoding failed');
+        setProcessing(false);
+      } finally {
         onTriggerConsumed?.();
       }
     },
-    [onTriggerConsumed]
+    [runDecode, onError, onTriggerConsumed]
   );
 
   useEffect(() => {
@@ -70,43 +75,13 @@ export function DecoderPanel({ triggerUrl, onTriggerConsumed }: Props) {
     decodeUrl(triggerUrl);
   }, [triggerUrl, decodeUrl]);
 
-  const handleFile = async (file: File) => {
+  const handleFile = (file: File) => {
     if (!file.type.startsWith('audio/')) {
-      setError('Please select an audio file (WAV, MP3, etc.)');
+      onError('Please select an audio file (WAV, MP3, etc.)');
       return;
     }
-    setProcessing(true);
-    setError(null);
-    setResult(null);
-    try {
-      const decoder = new SSTVDecoder();
-      const decoded = await decoder.decodeAudio(file);
-      setResult({
-        url: decoded.imageUrl,
-        filename: `sstv_decoded_${Date.now()}.png`,
-        diagnostics: decoded.diagnostics,
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Decoding failed');
-    } finally {
-      setProcessing(false);
-    }
+    runDecode(file);
   };
-
-  const download = () => {
-    if (!result) return;
-    const a = document.createElement('a');
-    a.href = result.url;
-    a.download = result.filename;
-    a.click();
-  };
-
-  const reset = () => {
-    setResult(null);
-    setError(null);
-  };
-
-  const verdict = result?.diagnostics?.quality?.verdict;
 
   return (
     <div ref={panelRef} className="bg-transparent">
@@ -129,43 +104,6 @@ export function DecoderPanel({ triggerUrl, onTriggerConsumed }: Props) {
         hint=""
         inputId="decode-input"
       />
-
-      {error && (
-        <div className="border border-red-500/30 bg-red-500/10 rounded-lg p-3 my-4 text-red-400 text-center text-sm">
-          {error}
-        </div>
-      )}
-
-      {result && (
-        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-5 mt-4">
-          <h3 className="mb-4 text-sm font-semibold text-center uppercase tracking-wider">
-            <span className={verdict === 'bad' ? 'text-red-400' : 'text-emerald-400'}>
-              {verdict === 'bad' ? 'Decoded (quality issues)' : 'Decoded successfully'}
-            </span>
-            <QualityBadge verdict={verdict} />
-          </h3>
-          <img
-            src={result.url}
-            alt="Decoded SSTV"
-            className="max-w-full h-auto rounded-lg block mx-auto mb-4 opacity-95"
-          />
-          <div className="flex gap-3 justify-center mt-4">
-            <button
-              onClick={download}
-              className="px-5 py-2 text-sm font-semibold bg-emerald-600 text-white rounded-lg hover:bg-emerald-500 hover:-translate-y-0.5 transition-all"
-            >
-              Download PNG
-            </button>
-            <button
-              onClick={reset}
-              className="px-5 py-2 text-sm font-semibold bg-white/10 text-white/70 rounded-lg hover:bg-white/15 transition-all"
-            >
-              Decode Another
-            </button>
-          </div>
-          {result.diagnostics && <DiagnosticsPanel diagnostics={result.diagnostics} />}
-        </div>
-      )}
     </div>
   );
 }
