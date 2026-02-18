@@ -56,11 +56,12 @@ export class SSTVDecoder {
   }
 
   async decodeAudioBuffer(arrayBuffer: ArrayBuffer): Promise<DecodeImageResult> {
-    const audioCtxCtor: typeof AudioContext =
-      (typeof window !== 'undefined'
+    const audioCtxCtor: typeof AudioContext = (
+      typeof window !== 'undefined'
         ? window.AudioContext ||
           (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
-        : (self as unknown as { AudioContext: typeof AudioContext }).AudioContext) as typeof AudioContext;
+        : (self as unknown as { AudioContext: typeof AudioContext }).AudioContext
+    ) as typeof AudioContext;
 
     const audioContext = new audioCtxCtor({ sampleRate: 48000 });
     const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
