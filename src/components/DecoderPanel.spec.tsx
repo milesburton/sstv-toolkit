@@ -37,7 +37,7 @@ const { workerState } = vi.hoisted(() => {
   return { workerState };
 });
 
-vi.mock('../workers/decoderWorker.js?worker', () => ({
+vi.mock('../workers/decoderWorker.ts?worker', () => ({
   default: class MockWorker {
     set onmessage(handler: (event: MessageEvent<WorkerOutboundMessage>) => void) {
       workerState.messageHandler = handler;

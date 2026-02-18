@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { DecodeState, WorkerOutboundMessage } from '../types.js';
-import DecoderWorker from '../workers/decoderWorker.js?worker';
+import DecoderWorker from '../workers/decoderWorker.ts?worker';
 import { DropZone } from './DropZone.js';
 
 interface Props {
