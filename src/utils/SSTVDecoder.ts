@@ -16,6 +16,12 @@ export interface SSTVDecoderOptions {
   autoCalibrate?: boolean;
 }
 
+function isWAV(buffer: ArrayBuffer): boolean {
+  if (buffer.byteLength < 12) return false;
+  const view = new DataView(buffer);
+  return view.getUint32(0, false) === 0x52494646 && view.getUint32(8, false) === 0x57415645;
+}
+
 function parseWAV(buffer: ArrayBuffer): { samples: Float32Array; sampleRate: number } {
   const view = new DataView(buffer);
   // Verify RIFF/WAVE header
@@ -92,12 +98,8 @@ export class SSTVDecoder {
   }
 
   async decodeAudioBuffer(arrayBuffer: ArrayBuffer): Promise<DecodeImageResult> {
-    // Try AudioContext first (main thread). Fall back to a hand-rolled WAV parser
-    // when AudioContext/OfflineAudioContext are unavailable (e.g. in Web Workers in
-    // some headless Chrome environments).
     if (typeof AudioContext !== 'undefined' || typeof OfflineAudioContext !== 'undefined') {
-      const Ctor =
-        typeof AudioContext !== 'undefined' ? AudioContext : OfflineAudioContext;
+      const Ctor = typeof AudioContext !== 'undefined' ? AudioContext : OfflineAudioContext;
       try {
         const ctx =
           Ctor === OfflineAudioContext
@@ -107,12 +109,17 @@ export class SSTVDecoder {
         const samples = audioBuffer.getChannelData(0);
         this.sampleRate = audioBuffer.sampleRate;
         return this.decodeSamples(samples);
-      } catch {
-        // Fall through to WAV parser
+      } catch (err) {
+        if (!isWAV(arrayBuffer)) throw err;
       }
     }
 
-    // WAV parser fallback for environments without Web Audio API.
+    if (!isWAV(arrayBuffer)) {
+      throw new Error(
+        'Web Audio API is unavailable in this environment and the file is not a WAV. ' +
+          'Please use a WAV file.'
+      );
+    }
     const { samples, sampleRate } = parseWAV(arrayBuffer);
     this.sampleRate = sampleRate;
     return this.decodeSamples(samples);
