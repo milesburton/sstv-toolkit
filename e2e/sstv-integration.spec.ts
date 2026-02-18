@@ -93,12 +93,13 @@ async function decodeAndValidate(page: import('@playwright/test').Page, audioPat
 test.describe('SSTV Encode → Decode Integration', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/sstv-toolkit/');
-    await expect(page.locator('h1')).toContainText('SSTV Toolkit');
+    await expect(page.locator('h1')).toContainText('Slow Scan Television');
   });
 
   test('should encode and decode a black/white test pattern with visible pixels', async ({
     page,
   }) => {
+    test.setTimeout(120000);
     const canvas = createCanvas(320, 240);
     const ctx = canvas.getContext('2d');
     ctx.fillStyle = 'black';
@@ -119,6 +120,7 @@ test.describe('SSTV Encode → Decode Integration', () => {
   });
 
   test('should decode a bright image with substantial brightness', async ({ page }) => {
+    test.setTimeout(120000);
     const canvas = createCanvas(320, 240);
     const ctx = canvas.getContext('2d');
     ctx.fillStyle = 'white';

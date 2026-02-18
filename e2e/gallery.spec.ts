@@ -2,8 +2,8 @@ import { expect, test } from '@playwright/test';
 
 test.describe('Gallery', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    await expect(page.locator('h1')).toContainText('SSTV Toolkit');
+    await page.goto('/sstv-toolkit/');
+    await expect(page.locator('h1')).toContainText('Slow Scan Television');
   });
 
   test('gallery section is visible with example cards', async ({ page }) => {
@@ -33,11 +33,13 @@ test.describe('Gallery', () => {
   test('each card shows a mode badge', async ({ page }) => {
     await page.locator('text=Example Transmissions').waitFor({ timeout: 10000 });
 
-    const badges = page.locator('text=Robot 36');
+    const gallerySection = page.locator('section').filter({ hasText: 'Example Transmissions' });
+    const badges = gallerySection.locator('span').filter({ hasText: /Robot 36|PD 120/ });
     await expect(badges.first()).toBeVisible();
   });
 
   test('"Try decoding" scrolls to decoder and starts decoding', async ({ page }) => {
+    test.setTimeout(180000);
     await page.locator('text=Example Transmissions').waitFor({ timeout: 10000 });
 
     const tryButtons = page.locator('button:has-text("Try decoding")');

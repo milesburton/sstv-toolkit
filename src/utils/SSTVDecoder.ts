@@ -16,6 +16,42 @@ export interface SSTVDecoderOptions {
   autoCalibrate?: boolean;
 }
 
+function parseWAV(buffer: ArrayBuffer): { samples: Float32Array; sampleRate: number } {
+  const view = new DataView(buffer);
+  // Verify RIFF/WAVE header
+  if (view.getUint32(0, false) !== 0x52494646 || view.getUint32(8, false) !== 0x57415645) {
+    throw new Error('Not a valid WAV file');
+  }
+  const sampleRate = view.getUint32(24, true);
+  const bitsPerSample = view.getUint16(34, true);
+  const channels = view.getUint16(22, true);
+  // Find the data chunk
+  let offset = 12;
+  while (offset + 8 <= buffer.byteLength) {
+    const chunkId = view.getUint32(offset, false);
+    const chunkSize = view.getUint32(offset + 4, true);
+    if (chunkId === 0x64617461) {
+      // 'data'
+      offset += 8;
+      const numSamples = Math.floor(chunkSize / (bitsPerSample / 8) / channels);
+      const samples = new Float32Array(numSamples);
+      for (let i = 0; i < numSamples; i++) {
+        const byteOffset = offset + i * channels * (bitsPerSample / 8);
+        if (bitsPerSample === 16) {
+          samples[i] = view.getInt16(byteOffset, true) / 32768;
+        } else if (bitsPerSample === 8) {
+          samples[i] = (view.getUint8(byteOffset) - 128) / 128;
+        } else {
+          samples[i] = view.getFloat32(byteOffset, true);
+        }
+      }
+      return { samples, sampleRate };
+    }
+    offset += 8 + chunkSize;
+  }
+  throw new Error('No data chunk found in WAV file');
+}
+
 export class SSTVDecoder {
   sampleRate: number;
   private mode: SSTVMode | null;
@@ -56,20 +92,29 @@ export class SSTVDecoder {
   }
 
   async decodeAudioBuffer(arrayBuffer: ArrayBuffer): Promise<DecodeImageResult> {
-    const audioCtxCtor: typeof AudioContext = (
-      typeof window !== 'undefined'
-        ? window.AudioContext ||
-          (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
-        : (self as unknown as { AudioContext: typeof AudioContext }).AudioContext
-    ) as typeof AudioContext;
+    // Try AudioContext first (main thread). Fall back to a hand-rolled WAV parser
+    // when AudioContext/OfflineAudioContext are unavailable (e.g. in Web Workers in
+    // some headless Chrome environments).
+    if (typeof AudioContext !== 'undefined' || typeof OfflineAudioContext !== 'undefined') {
+      const Ctor =
+        typeof AudioContext !== 'undefined' ? AudioContext : OfflineAudioContext;
+      try {
+        const ctx =
+          Ctor === OfflineAudioContext
+            ? new OfflineAudioContext(1, 1, 48000)
+            : new (Ctor as typeof AudioContext)({ sampleRate: 48000 });
+        const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+        const samples = audioBuffer.getChannelData(0);
+        this.sampleRate = audioBuffer.sampleRate;
+        return this.decodeSamples(samples);
+      } catch {
+        // Fall through to WAV parser
+      }
+    }
 
-    const audioContext = new audioCtxCtor({ sampleRate: 48000 });
-    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-
-    const samples = audioBuffer.getChannelData(0);
-    this.sampleRate = audioBuffer.sampleRate;
-    audioContext.close();
-
+    // WAV parser fallback for environments without Web Audio API.
+    const { samples, sampleRate } = parseWAV(arrayBuffer);
+    this.sampleRate = sampleRate;
     return this.decodeSamples(samples);
   }
 
