@@ -17,7 +17,7 @@ async function encodeImage(page, testImagePath) {
   const encodeInput = page.locator('input[type="file"]').first();
   await encodeInput.setInputFiles(testImagePath);
 
-  await expect(page.locator('text=Encoded Successfully')).toBeVisible({ timeout: 30000 });
+  await expect(page.locator('text=Encoded successfully')).toBeVisible({ timeout: 30000 });
   await expect(page.locator('audio')).toBeVisible();
 
   const downloadPromise = page.waitForEvent('download');
@@ -47,7 +47,7 @@ async function decodeAndValidate(page, audioPath) {
   const decodeInput = page.locator('input[type="file"]').last();
   await decodeInput.setInputFiles(audioPath);
 
-  await expect(page.locator('text=Decoded Successfully')).toBeVisible({ timeout: 60000 });
+  await expect(page.locator('text=Decoded successfully')).toBeVisible({ timeout: 60000 });
 
   const decodedImage = page.locator('img[alt="Decoded SSTV"]');
   await expect(decodedImage).toBeVisible();
@@ -163,7 +163,7 @@ test.describe('SSTV Encode → Decode Integration', () => {
     const encodeInput = page.locator('input[type="file"]').first();
     await encodeInput.setInputFiles(testImagePath);
 
-    await expect(page.locator('text=Encoded Successfully')).toBeVisible({ timeout: 30000 });
+    await expect(page.locator('text=Encoded successfully')).toBeVisible({ timeout: 30000 });
   });
 
   test('should work with Martin M1 mode', async ({ page }) => {
@@ -181,7 +181,7 @@ test.describe('SSTV Encode → Decode Integration', () => {
     const encodeInput = page.locator('input[type="file"]').first();
     await encodeInput.setInputFiles(testImagePath);
 
-    await expect(page.locator('text=Encoded Successfully')).toBeVisible({ timeout: 30000 });
+    await expect(page.locator('text=Encoded successfully')).toBeVisible({ timeout: 30000 });
   });
 
   test('should work with Scottie S1 mode', async ({ page }) => {
@@ -199,7 +199,7 @@ test.describe('SSTV Encode → Decode Integration', () => {
     const encodeInput = page.locator('input[type="file"]').first();
     await encodeInput.setInputFiles(testImagePath);
 
-    await expect(page.locator('text=Encoded Successfully')).toBeVisible({ timeout: 30000 });
+    await expect(page.locator('text=Encoded successfully')).toBeVisible({ timeout: 30000 });
   });
 
   test('should handle file upload via input', async ({ page }) => {
@@ -214,6 +214,6 @@ test.describe('SSTV Encode → Decode Integration', () => {
     const fileInput = page.locator('input[type="file"]').first();
     await fileInput.setInputFiles(testImagePath);
 
-    await expect(page.locator('text=Encoded Successfully')).toBeVisible({ timeout: 30000 });
+    await expect(page.locator('text=Encoded successfully')).toBeVisible({ timeout: 30000 });
   });
 });

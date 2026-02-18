@@ -46,9 +46,9 @@ test.describe('Gallery', () => {
 
     await expect(
       page
-        .locator('text=Decoded Successfully')
+        .locator('text=Decoded successfully')
         .or(page.locator('text=Decoded (quality issues)'))
-        .or(page.locator('text=Decoding…').or(page.locator('🔄')))
+        .or(page.locator('text=Decoding…'))
     ).toBeVisible({ timeout: 120000 });
   });
 
