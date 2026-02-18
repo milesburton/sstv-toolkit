@@ -34,20 +34,6 @@ Web-based SSTV encoder/decoder. Converts images to SSTV audio and decodes SSTV t
 | Scottie S1 | 320×256 | 110s | RGB |
 | PD120 | 640×496 | 122s | YUV |
 
-## Development
-
-```bash
-npm install
-npm run dev        # Development server
-npm test          # Run tests (requires Node 20+)
-npm run build     # Production build
-```
-
-## Requirements
-
-- Modern browser with Web Audio API and Canvas API support
-- Node.js 20+ for development/testing
-
 ## License
 
 MIT
