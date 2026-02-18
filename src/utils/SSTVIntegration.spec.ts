@@ -1,21 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { SSTVEncoder } from './SSTVEncoder';
+import { SSTVEncoder } from './SSTVEncoder.js';
 
 describe('SSTV Integration Tests', () => {
   describe('Frequency Accuracy', () => {
     it('should generate accurate sync pulses at 1200 Hz', () => {
       const encoder = new SSTVEncoder('ROBOT36');
-      const samples = [];
+      const samples: number[] = [];
 
       encoder.addTone(samples, 1200, 0.01);
 
       expect(samples.length).toBeGreaterThan(0);
 
       let zeroCrossings = 0;
-      let lastSign = samples[0] >= 0;
+      let lastSign = samples[0]! >= 0;
 
       for (let i = 1; i < samples.length; i++) {
-        const sign = samples[i] >= 0;
+        const sign = samples[i]! >= 0;
         if (sign !== lastSign) {
           zeroCrossings++;
           lastSign = sign;
@@ -38,7 +38,7 @@ describe('SSTV Integration Tests', () => {
         expect(freq).toBeGreaterThanOrEqual(1500);
         expect(freq).toBeLessThanOrEqual(2300);
 
-        const samples = [];
+        const samples: number[] = [];
         encoder.addTone(samples, freq, 0.005);
 
         expect(samples.length).toBeGreaterThan(0);
@@ -58,7 +58,7 @@ describe('SSTV Integration Tests', () => {
       ];
 
       testColors.forEach(({ r, g, b }) => {
-        const samples = [];
+        const samples: number[] = [];
         const pixelData = new Uint8ClampedArray([r, g, b, 255, r, g, b, 255]);
 
         encoder.addScanLineYUV(samples, pixelData, 2, 0);
@@ -80,7 +80,7 @@ describe('SSTV Integration Tests', () => {
 
     it('should encode/decode neutral gray without color shift', () => {
       const encoder = new SSTVEncoder('ROBOT36');
-      const samples = [];
+      const samples: number[] = [];
       const grayData = new Uint8ClampedArray([128, 128, 128, 255, 128, 128, 128, 255]);
 
       encoder.addScanLineYUV(samples, grayData, 2, 0);

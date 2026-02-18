@@ -1,16 +1,20 @@
 import { Complex } from './Complex.js';
 
 export class KaiserFIR {
-  constructor(cutoffFreq, sampleRate, duration, beta = 8.0) {
+  private readonly taps: number[];
+  private readonly buffer: Complex[];
+  private bufferIndex: number = 0;
+
+  constructor(cutoffFreq: number, sampleRate: number, duration: number, beta: number = 8.0) {
     const numTaps = Math.floor(duration * sampleRate) | 1;
-    this.taps = new Array(numTaps);
+    this.taps = new Array<number>(numTaps);
 
     const normalizedCutoff = (2 * cutoffFreq) / sampleRate;
     const center = (numTaps - 1) / 2;
 
     for (let i = 0; i < numTaps; i++) {
       const x = i - center;
-      let sinc;
+      let sinc: number;
       if (x === 0) {
         sinc = normalizedCutoff;
       } else {
@@ -25,17 +29,16 @@ export class KaiserFIR {
       this.taps[i] /= sum;
     }
 
-    this.buffer = new Array(numTaps).fill(null).map(() => new Complex(0, 0));
-    this.bufferIndex = 0;
+    this.buffer = new Array<Complex>(numTaps).fill(null!).map(() => new Complex(0, 0));
   }
 
-  kaiser(n, N, beta) {
+  private kaiser(n: number, N: number, beta: number): number {
     const alpha = (N - 1) / 2;
     const arg = beta * Math.sqrt(1 - ((n - alpha) / alpha) ** 2);
     return this.besselI0(arg) / this.besselI0(beta);
   }
 
-  besselI0(x) {
+  private besselI0(x: number): number {
     let sum = 1.0;
     let term = 1.0;
     const threshold = 1e-12;
@@ -47,7 +50,7 @@ export class KaiserFIR {
     return sum;
   }
 
-  push(sample) {
+  push(sample: Complex): Complex {
     this.buffer[this.bufferIndex] = sample;
     this.bufferIndex = (this.bufferIndex + 1) % this.buffer.length;
 
@@ -63,7 +66,7 @@ export class KaiserFIR {
     return new Complex(real, imag);
   }
 
-  reset() {
+  reset(): void {
     this.buffer.fill(new Complex(0, 0));
     this.bufferIndex = 0;
   }

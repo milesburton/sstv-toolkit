@@ -1,7 +1,7 @@
 {
   "name": "sstv-toolkit",
   "private": true,
-  "version": "1.2.18",
+  "version": "1.2.20",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -15,6 +15,7 @@
     "test:e2e:ui": "playwright test --ui",
     "test:all": "npm run test:run && npm run test:e2e",
     "generate-examples": "node generate-examples.js",
+    "generate-gallery": "node generate-gallery.js",
     "biome:check": "biome check --write .",
     "biome:lint": "biome lint .",
     "biome:format": "biome format --write .",
@@ -32,8 +33,10 @@
     "@commitlint/config-conventional": "^20.4.1",
     "@eslint/js": "^9.39.1",
     "@playwright/test": "^1.58.2",
+    "@tailwindcss/vite": "^4.1.18",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
+    "@types/node": "^25.2.3",
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
@@ -47,6 +50,8 @@
     "happy-dom": "^20.4.0",
     "husky": "^9.1.7",
     "sass": "^1.97.3",
+    "tailwindcss": "^4.1.18",
+    "typescript": "^5.9.3",
     "vite": "^7.2.4",
     "vitest": "^4.0.18"
   }

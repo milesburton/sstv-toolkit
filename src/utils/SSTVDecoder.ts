@@ -1,19 +1,38 @@
+import type { DecodeDiagnostics, DecodeResult, ImageQuality, SSTVMode } from '../types.js';
 import { SSTV_MODES } from './SSTVEncoder.js';
 
 const FREQ_SYNC = 1200;
 const FREQ_BLACK = 1500;
 const FREQ_WHITE = 2300;
 
+export interface SSTVDecoderOptions {
+  freqOffset?: number;
+  autoCalibrate?: boolean;
+}
+
 export class SSTVDecoder {
-  constructor(sampleRate = 48000, options = {}) {
+  sampleRate: number;
+  private mode: SSTVMode | null;
+  freqOffset: number;
+  autoCalibrate: boolean;
+  private visEndPos: number | null = null;
+  private lastVisCode: number | null = null;
+  private lastVisParityOk: boolean = false;
+  private visFreqShift: number = 0;
+  private currentChromaType: 'U' | 'V' = 'V';
+
+  constructor(sampleRate: number = 48000, options: SSTVDecoderOptions = {}) {
     this.sampleRate = sampleRate;
     this.mode = null;
-    this.freqOffset = options.freqOffset || 0;
+    this.freqOffset = options.freqOffset ?? 0;
     this.autoCalibrate = options.autoCalibrate !== false;
   }
 
-  async decodeAudio(audioFile) {
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)({
+  async decodeAudio(audioFile: { arrayBuffer(): Promise<ArrayBuffer> }): Promise<DecodeResult> {
+    const audioContext = new (
+      window.AudioContext ||
+      (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+    )({
       sampleRate: 48000,
     });
     const arrayBuffer = await audioFile.arrayBuffer();
@@ -30,7 +49,7 @@ export class SSTVDecoder {
     }
 
     if (typeof window !== 'undefined') {
-      console.log('📡 SSTV Mode detected:', this.mode.name);
+      console.log('SSTV Mode detected:', this.mode.name);
     }
 
     return this.decodeImage(samples, {
@@ -39,7 +58,7 @@ export class SSTVDecoder {
     });
   }
 
-  detectMode(samples) {
+  detectMode(samples: Float32Array): SSTVMode {
     const step = Math.floor(this.sampleRate * 0.0005);
     const searchLimit = Math.min(samples.length, this.sampleRate * 60);
 
@@ -139,10 +158,10 @@ export class SSTVDecoder {
     if (timingMode) return timingMode;
 
     this.visFreqShift = 0;
-    return SSTV_MODES.ROBOT36;
+    return SSTV_MODES.ROBOT36 as SSTVMode;
   }
 
-  detectModeByTiming(samples) {
+  private detectModeByTiming(samples: Float32Array): SSTVMode | null {
     const scanLimit = Math.min(samples.length, this.sampleRate * 60);
     const chunkSamples = Math.floor(0.05 * this.sampleRate);
     const minLeaderChunks = 4;
@@ -166,7 +185,7 @@ export class SSTVDecoder {
     const searchStart = leaderEnd + visSkip;
     const maxSearch = Math.min(samples.length, searchStart + Math.floor(3 * this.sampleRate));
 
-    const syncs = [];
+    const syncs: number[] = [];
     let lastSync = -1;
     for (let i = searchStart; i < maxSearch; i += step) {
       const f = this.detectFrequency(samples, i, 0.005);
@@ -180,15 +199,17 @@ export class SSTVDecoder {
     }
     if (syncs.length < 2) return null;
 
-    const period = (syncs[syncs.length - 1] - syncs[0]) / ((syncs.length - 1) * this.sampleRate);
+    const lastSyncPos = syncs[syncs.length - 1] ?? 0;
+    const firstSyncPos = syncs[0] ?? 0;
+    const period = (lastSyncPos - firstSyncPos) / ((syncs.length - 1) * this.sampleRate);
 
     for (const [, mode] of Object.entries(SSTV_MODES)) {
       const expected =
         mode.colorFormat === 'PD'
-          ? mode.componentTime * 4 + mode.syncPulse + mode.syncPorch
+          ? (mode.componentTime ?? 0) * 4 + mode.syncPulse + mode.syncPorch
           : mode.scanTime;
       if (Math.abs(period - expected) / expected < 0.1) {
-        this.visEndPos = syncs[0];
+        this.visEndPos = syncs[0] ?? 0;
         this.visFreqShift = 0;
         return mode;
       }
@@ -196,7 +217,7 @@ export class SSTVDecoder {
     return null;
   }
 
-  decodeVIS(samples, startIdx, freqShift = 0) {
+  decodeVIS(samples: Float32Array, startIdx: number, freqShift: number = 0): number {
     let idx = startIdx;
     let visCode = 0;
     let ones = 0;
@@ -217,13 +238,19 @@ export class SSTVDecoder {
     return visCode;
   }
 
-  decodeImage(samples, audioMeta = {}) {
+  decodeImage(
+    samples: Float32Array,
+    audioMeta: { sampleRate?: number; fileDuration?: number } = {}
+  ): DecodeResult {
     const decodeStart = Date.now();
+    if (!this.mode) throw new Error('No SSTV mode set');
+    const mode = this.mode;
     const canvas = document.createElement('canvas');
-    canvas.width = this.mode.width;
-    canvas.height = this.mode.lines;
+    canvas.width = mode.width;
+    canvas.height = mode.lines;
 
     const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Could not get canvas context');
     const imageData = ctx.createImageData(canvas.width, canvas.height);
 
     for (let i = 0; i < imageData.data.length; i += 4) {
@@ -233,15 +260,16 @@ export class SSTVDecoder {
       imageData.data[i + 3] = 255;
     }
 
-    let chromaU = null;
-    let chromaV = null;
-    if (this.mode.colorFormat === 'YUV' || this.mode.colorFormat === 'PD') {
-      chromaU = new Array(this.mode.width * this.mode.lines).fill(128);
-      chromaV = new Array(this.mode.width * this.mode.lines).fill(128);
-    }
+    const needsChroma = mode.colorFormat === 'YUV' || mode.colorFormat === 'PD';
+    const chromaU: number[] = needsChroma
+      ? new Array<number>(mode.width * mode.lines).fill(128)
+      : [];
+    const chromaV: number[] = needsChroma
+      ? new Array<number>(mode.width * mode.lines).fill(128)
+      : [];
 
-    const visEnd = this.visEndPos || Math.floor(0.61 * this.sampleRate);
-    const lineSamplesInit = Math.floor((this.mode.scanTime || 0.15) * this.sampleRate);
+    const visEnd = this.visEndPos ?? Math.floor(0.61 * this.sampleRate);
+    const lineSamplesInit = Math.floor((mode.scanTime || 0.15) * this.sampleRate);
     let position = this.findSyncPulse(samples, visEnd, visEnd + lineSamplesInit);
 
     if (position === -1) {
@@ -262,29 +290,27 @@ export class SSTVDecoder {
       if (refined !== 0) this.freqOffset = refined;
     }
 
-    if (this.mode.colorFormat === 'PD') {
-      for (let y = 0; y < this.mode.lines; y += 2) {
-        position += Math.floor((this.mode.syncPulse + this.mode.syncPorch) * this.sampleRate);
+    if (mode.colorFormat === 'PD') {
+      for (let y = 0; y < mode.lines; y += 2) {
+        position += Math.floor((mode.syncPulse + mode.syncPorch) * this.sampleRate);
         position = this.decodeScanLinePD(samples, position, imageData, chromaU, chromaV, y);
 
-        if (this.autoCalibrate && y + 2 < this.mode.lines) {
-          const lineSamples = Math.floor(this.mode.componentTime * 4 * this.sampleRate);
+        if (this.autoCalibrate && y + 2 < mode.lines) {
+          const lineSamples = Math.floor(mode.componentTime! * 4 * this.sampleRate);
           const tolerance = Math.floor(lineSamples * 0.1);
           const nextSync = this.findSyncPulse(samples, position - tolerance, position + tolerance);
           if (nextSync !== -1) position = nextSync;
         }
       }
     } else {
-      for (let y = 0; y < this.mode.lines && position < samples.length; y++) {
-        position += Math.floor((this.mode.syncPulse + this.mode.syncPorch) * this.sampleRate);
+      for (let y = 0; y < mode.lines && position < samples.length; y++) {
+        position += Math.floor((mode.syncPulse + mode.syncPorch) * this.sampleRate);
 
-        if (this.mode.colorFormat === 'RGB') {
+        if (mode.colorFormat === 'RGB') {
           position = this.decodeScanLine(samples, position, imageData, y, 1);
-          if (this.mode.separatorPulse)
-            position += Math.floor(this.mode.separatorPulse * this.sampleRate);
+          if (mode.separatorPulse) position += Math.floor(mode.separatorPulse * this.sampleRate);
           position = this.decodeScanLine(samples, position, imageData, y, 2);
-          if (this.mode.separatorPulse)
-            position += Math.floor(this.mode.separatorPulse * this.sampleRate);
+          if (mode.separatorPulse) position += Math.floor(mode.separatorPulse * this.sampleRate);
           position = this.decodeScanLine(samples, position, imageData, y, 0);
         } else {
           position = this.decodeScanLineYUV(samples, position, imageData, y);
@@ -309,7 +335,7 @@ export class SSTVDecoder {
         }
 
         if (this.autoCalibrate) {
-          const lineSamples = Math.floor(this.mode.scanTime * this.sampleRate);
+          const lineSamples = Math.floor(mode.scanTime * this.sampleRate);
           const tolerance = Math.floor(lineSamples * 0.1);
           const nextSync = this.findSyncPulse(samples, position - tolerance, position + tolerance);
           if (nextSync !== -1) {
@@ -319,9 +345,9 @@ export class SSTVDecoder {
       }
     }
 
-    if (this.mode.colorFormat === 'YUV') {
+    if (mode.colorFormat === 'YUV') {
       this.convertYUVtoRGB(imageData, chromaU, chromaV);
-    } else if (this.mode.colorFormat === 'PD') {
+    } else if (mode.colorFormat === 'PD') {
       this.convertPDtoRGB(imageData, chromaU, chromaV);
     }
 
@@ -330,34 +356,33 @@ export class SSTVDecoder {
     const imageUrl = canvas.toDataURL('image/png');
     const quality = this.analyzeImageQuality(ctx, canvas.width, canvas.height);
 
-    return {
-      imageUrl,
-      diagnostics: {
-        mode: this.mode.name,
-        visCode: this.lastVisCode,
-        sampleRate: audioMeta.sampleRate || this.sampleRate,
-        fileDuration: audioMeta.fileDuration ? `${audioMeta.fileDuration.toFixed(2)}s` : null,
-        freqOffset: this.freqOffset,
-        autoCalibrate: this.autoCalibrate,
-        visEndPos: this.visEndPos,
-        decodeTimeMs: Date.now() - decodeStart,
-        quality,
-      },
+    const diagnostics: DecodeDiagnostics = {
+      mode: mode.name,
+      visCode: this.lastVisCode,
+      sampleRate: audioMeta.sampleRate ?? this.sampleRate,
+      fileDuration: audioMeta.fileDuration ? `${audioMeta.fileDuration.toFixed(2)}s` : null,
+      freqOffset: this.freqOffset,
+      autoCalibrate: this.autoCalibrate,
+      visEndPos: this.visEndPos,
+      decodeTimeMs: Date.now() - decodeStart,
+      quality,
     };
+
+    return { imageUrl, diagnostics };
   }
 
-  analyzeImageQuality(ctx, width, height) {
+  analyzeImageQuality(ctx: CanvasRenderingContext2D, width: number, height: number): ImageQuality {
     const imageData = ctx.getImageData(0, 0, width, height);
     const data = imageData.data;
-    let rSum = 0,
-      gSum = 0,
-      bSum = 0;
+    let rSum = 0;
+    let gSum = 0;
+    let bSum = 0;
     const pixels = width * height;
 
     for (let i = 0; i < data.length; i += 4) {
-      rSum += data[i];
-      gSum += data[i + 1];
-      bSum += data[i + 2];
+      rSum += data[i]!;
+      gSum += data[i + 1]!;
+      bSum += data[i + 2]!;
     }
 
     const rAvg = rSum / pixels;
@@ -367,8 +392,8 @@ export class SSTVDecoder {
     const greenDominance = gAvg - (rAvg + bAvg) / 2;
     const colorImbalance = Math.max(rAvg, gAvg, bAvg) - Math.min(rAvg, gAvg, bAvg);
 
-    let verdict = 'good';
-    const warnings = [];
+    let verdict: 'good' | 'warn' | 'bad' = 'good';
+    const warnings: string[] = [];
 
     if (brightness < 10) {
       verdict = 'bad';
@@ -396,12 +421,19 @@ export class SSTVDecoder {
     };
   }
 
-  decodeScanLine(samples, startPos, imageData, y, channel) {
-    const totalSamples = Math.floor(this.mode.scanTime * this.sampleRate);
+  decodeScanLine(
+    samples: Float32Array,
+    startPos: number,
+    imageData: ImageData,
+    y: number,
+    channel: number
+  ): number {
+    const mode = this.mode!;
+    const totalSamples = Math.floor(mode.scanTime * this.sampleRate);
 
-    for (let x = 0; x < this.mode.width; x++) {
-      const startSample = Math.floor((x / this.mode.width) * totalSamples);
-      const endSample = Math.floor(((x + 1) / this.mode.width) * totalSamples);
+    for (let x = 0; x < mode.width; x++) {
+      const startSample = Math.floor((x / mode.width) * totalSamples);
+      const endSample = Math.floor(((x + 1) / mode.width) * totalSamples);
       const pos = startPos + startSample;
       const duration = (endSample - startSample) / this.sampleRate;
 
@@ -411,7 +443,7 @@ export class SSTVDecoder {
       let value = ((freq - FREQ_BLACK) / (FREQ_WHITE - FREQ_BLACK)) * 255;
       value = Math.max(0, Math.min(255, Math.round(value)));
 
-      const idx = (y * this.mode.width + x) * 4;
+      const idx = (y * mode.width + x) * 4;
       imageData.data[idx + channel] = value;
       imageData.data[idx + 3] = 255;
     }
@@ -419,7 +451,7 @@ export class SSTVDecoder {
     return startPos + totalSamples;
   }
 
-  detectFrequencyRange(samples, startIdx, duration) {
+  detectFrequencyRange(samples: Float32Array, startIdx: number, duration: number): number {
     const numSamples = Math.floor(duration * this.sampleRate);
     const endIdx = Math.min(startIdx + numSamples, samples.length);
 
@@ -450,14 +482,20 @@ export class SSTVDecoder {
     return detectedFreq;
   }
 
-  decodeScanLineYUV(samples, startPos, imageData, y) {
+  decodeScanLineYUV(
+    samples: Float32Array,
+    startPos: number,
+    imageData: ImageData,
+    y: number
+  ): number {
+    const mode = this.mode!;
     const Y_SCAN_TIME = 0.088;
     const totalSamples = Math.floor(Y_SCAN_TIME * this.sampleRate);
-    const minWindowSamples = Math.max(96, Math.floor(totalSamples / this.mode.width) * 4);
+    const minWindowSamples = Math.max(96, Math.floor(totalSamples / mode.width) * 4);
 
-    for (let x = 0; x < this.mode.width; x++) {
-      const startSample = Math.floor((x / this.mode.width) * totalSamples);
-      const endSample = Math.floor(((x + 1) / this.mode.width) * totalSamples);
+    for (let x = 0; x < mode.width; x++) {
+      const startSample = Math.floor((x / mode.width) * totalSamples);
+      const endSample = Math.floor(((x + 1) / mode.width) * totalSamples);
       const pos = startPos + startSample;
       const windowEnd = Math.min(
         startPos + totalSamples,
@@ -475,7 +513,7 @@ export class SSTVDecoder {
         Math.min(255, Math.round(((freq - freqBlack) / (freqWhite - freqBlack)) * 255))
       );
 
-      const pixelIdx = (y * this.mode.width + x) * 4;
+      const pixelIdx = (y * mode.width + x) * 4;
       imageData.data[pixelIdx] = value;
       imageData.data[pixelIdx + 1] = value;
       imageData.data[pixelIdx + 2] = value;
@@ -485,13 +523,21 @@ export class SSTVDecoder {
     return startPos + totalSamples;
   }
 
-  decodeScanLineChroma(samples, startPos, chromaU, chromaV, y, componentType) {
+  decodeScanLineChroma(
+    samples: Float32Array,
+    startPos: number,
+    chromaU: number[],
+    chromaV: number[],
+    y: number,
+    componentType: 'U' | 'V'
+  ): number {
+    const mode = this.mode!;
     const CHROMA_SCAN_TIME = 0.044;
-    const halfWidth = Math.floor(this.mode.width / 2);
+    const halfWidth = Math.floor(mode.width / 2);
     const totalSamples = Math.floor(CHROMA_SCAN_TIME * this.sampleRate);
     const minWindowSamples = Math.max(96, Math.floor(totalSamples / halfWidth) * 4);
 
-    const frequencies = [];
+    const frequencies: number[] = [];
     for (let x = 0; x < halfWidth; x++) {
       const startSample = Math.floor((x / halfWidth) * totalSamples);
       const endSample = Math.floor(((x + 1) / halfWidth) * totalSamples);
@@ -503,7 +549,7 @@ export class SSTVDecoder {
       const duration = (windowEnd - pixelPos) / this.sampleRate;
 
       if (pixelPos + (endSample - startSample) >= samples.length) {
-        frequencies.push(frequencies[frequencies.length - 1] || 1900);
+        frequencies.push(frequencies[frequencies.length - 1] ?? 1900);
         continue;
       }
 
@@ -511,16 +557,16 @@ export class SSTVDecoder {
     }
 
     for (let x = 0; x < halfWidth; x++) {
-      let freq = frequencies[x];
+      let freq = frequencies[x]!;
 
       if (x >= 2 && x < halfWidth - 2) {
         freq = [
-          frequencies[x - 2],
-          frequencies[x - 1],
-          frequencies[x],
-          frequencies[x + 1],
-          frequencies[x + 2],
-        ].sort((a, b) => a - b)[2];
+          frequencies[x - 2]!,
+          frequencies[x - 1]!,
+          frequencies[x]!,
+          frequencies[x + 1]!,
+          frequencies[x + 2]!,
+        ].sort((a, b) => a - b)[2]!;
       }
 
       const freqBlack = this.freqOffset ? FREQ_BLACK + this.freqOffset : FREQ_BLACK;
@@ -530,33 +576,41 @@ export class SSTVDecoder {
         Math.min(255, Math.round(((freq - freqBlack) / (freqWhite - freqBlack)) * 255))
       );
 
-      const idx1 = y * this.mode.width + x * 2;
-      const idx2 = y * this.mode.width + x * 2 + 1;
+      const idx1 = y * mode.width + x * 2;
+      const idx2 = y * mode.width + x * 2 + 1;
 
       if (componentType === 'U') {
         chromaU[idx1] = value;
-        if (idx2 < this.mode.width * this.mode.lines) chromaU[idx2] = value;
+        if (idx2 < mode.width * mode.lines) chromaU[idx2] = value;
       } else if (componentType === 'V') {
         chromaV[idx1] = value;
-        if (idx2 < this.mode.width * this.mode.lines) chromaV[idx2] = value;
+        if (idx2 < mode.width * mode.lines) chromaV[idx2] = value;
       }
     }
 
     return startPos + totalSamples;
   }
 
-  decodeScanLinePD(samples, startPos, imageData, chromaU, chromaV, y) {
-    const COMPONENT_TIME = this.mode.componentTime;
-    const width = this.mode.width;
-    const lines = this.mode.lines;
+  decodeScanLinePD(
+    samples: Float32Array,
+    startPos: number,
+    imageData: ImageData,
+    chromaU: number[],
+    chromaV: number[],
+    y: number
+  ): number {
+    const mode = this.mode!;
+    const COMPONENT_TIME = mode.componentTime!;
+    const width = mode.width;
+    const lines = mode.lines;
     const y1 = Math.min(y + 1, lines - 1);
     const totalSamples = Math.floor(COMPONENT_TIME * this.sampleRate);
 
     const pixelSamples = totalSamples / width;
     const minWindowSamples = Math.max(96, Math.floor(pixelSamples) * 4);
 
-    const decodeComponent = (baseOffset) => {
-      const result = [];
+    const decodeComponent = (baseOffset: number): number[] => {
+      const result: number[] = [];
       const componentStart = startPos + baseOffset;
       for (let x = 0; x < width; x++) {
         const startSample = Math.floor((x / width) * totalSamples);
@@ -581,38 +635,39 @@ export class SSTVDecoder {
 
     for (let x = 0; x < width; x++) {
       const idx0 = (y * width + x) * 4;
-      imageData.data[idx0] = y0values[x];
-      imageData.data[idx0 + 1] = y0values[x];
-      imageData.data[idx0 + 2] = y0values[x];
+      imageData.data[idx0] = y0values[x]!;
+      imageData.data[idx0 + 1] = y0values[x]!;
+      imageData.data[idx0 + 2] = y0values[x]!;
       imageData.data[idx0 + 3] = 255;
 
       const idx1 = (y1 * width + x) * 4;
-      imageData.data[idx1] = y1values[x];
-      imageData.data[idx1 + 1] = y1values[x];
-      imageData.data[idx1 + 2] = y1values[x];
+      imageData.data[idx1] = y1values[x]!;
+      imageData.data[idx1 + 1] = y1values[x]!;
+      imageData.data[idx1 + 2] = y1values[x]!;
       imageData.data[idx1 + 3] = 255;
 
-      chromaV[y * width + x] = ryValues[x];
-      chromaV[y1 * width + x] = ryValues[x];
-      chromaU[y * width + x] = byValues[x];
-      chromaU[y1 * width + x] = byValues[x];
+      chromaV[y * width + x] = ryValues[x]!;
+      chromaV[y1 * width + x] = ryValues[x]!;
+      chromaU[y * width + x] = byValues[x]!;
+      chromaU[y1 * width + x] = byValues[x]!;
     }
 
     return startPos + totalSamples * 4;
   }
 
-  convertYUVtoRGB(imageData, chromaU, chromaV) {
-    for (let y = 0; y < this.mode.lines; y += 2) {
+  convertYUVtoRGB(imageData: ImageData, chromaU: number[], chromaV: number[]): void {
+    const mode = this.mode!;
+    for (let y = 0; y < mode.lines; y += 2) {
       const evenLine = y;
-      const oddLine = Math.min(y + 1, this.mode.lines - 1);
+      const oddLine = Math.min(y + 1, mode.lines - 1);
 
-      for (let x = 0; x < this.mode.width; x++) {
-        const V = chromaV[evenLine * this.mode.width + x] || 128;
-        const U = chromaU[oddLine * this.mode.width + x] || 128;
+      for (let x = 0; x < mode.width; x++) {
+        const V = chromaV[evenLine * mode.width + x] || 128;
+        const U = chromaU[oddLine * mode.width + x] || 128;
 
-        for (let ly = evenLine; ly <= oddLine && ly < this.mode.lines; ly++) {
-          const idx = (ly * this.mode.width + x) * 4;
-          const Y = imageData.data[idx];
+        for (let ly = evenLine; ly <= oddLine && ly < mode.lines; ly++) {
+          const idx = (ly * mode.width + x) * 4;
+          const Y = imageData.data[idx]!;
 
           imageData.data[idx] = Math.max(0, Math.min(255, Math.round(Y + 1.402 * (V - 128))));
           imageData.data[idx + 1] = Math.max(
@@ -625,14 +680,15 @@ export class SSTVDecoder {
     }
   }
 
-  convertPDtoRGB(imageData, chromaU, chromaV) {
-    const width = this.mode.width;
-    const lines = this.mode.lines;
+  convertPDtoRGB(imageData: ImageData, chromaU: number[], chromaV: number[]): void {
+    const mode = this.mode!;
+    const width = mode.width;
+    const lines = mode.lines;
 
     for (let y = 0; y < lines; y++) {
       for (let x = 0; x < width; x++) {
         const idx = (y * width + x) * 4;
-        const Y = imageData.data[idx];
+        const Y = imageData.data[idx]!;
         const RYadj = (chromaV[y * width + x] || 128) - 128;
         const BYadj = (chromaU[y * width + x] || 128) - 128;
 
@@ -646,19 +702,20 @@ export class SSTVDecoder {
     }
   }
 
-  estimateFreqOffset(samples, firstSyncPos) {
-    const lineTime = this.mode.syncPulse + this.mode.syncPorch + 0.088 + 0.0045 + 0.0015 + 0.044;
+  estimateFreqOffset(samples: Float32Array, firstSyncPos: number): number {
+    const mode = this.mode!;
+    const lineTime = mode.syncPulse + mode.syncPorch + 0.088 + 0.0045 + 0.0015 + 0.044;
     const lineSamples = Math.floor(lineTime * this.sampleRate);
     const tolerance = Math.floor(lineSamples * 0.05);
 
-    const offsets = [];
+    const offsets: number[] = [];
     let pos = firstSyncPos;
 
     for (let line = 0; line < 20; line++) {
       const syncPos = this.findSyncPulse(samples, pos - tolerance, pos + tolerance);
       if (syncPos === -1) break;
 
-      const measuredFreq = this.detectFrequency(samples, syncPos, this.mode.syncPulse);
+      const measuredFreq = this.detectFrequency(samples, syncPos, mode.syncPulse);
       offsets.push(measuredFreq - FREQ_SYNC);
       pos = syncPos + lineSamples;
     }
@@ -666,13 +723,14 @@ export class SSTVDecoder {
     if (offsets.length < 5) return 0;
 
     offsets.sort((a, b) => a - b);
-    const medianOffset = offsets[Math.floor(offsets.length / 2)];
+    const medianOffset = offsets[Math.floor(offsets.length / 2)]!;
 
     return Math.abs(medianOffset) > 50 ? Math.round(medianOffset) : 0;
   }
 
-  findSyncPulse(samples, startPos, endPos = samples.length) {
-    const syncDuration = Math.max(0.004, this.mode?.syncPulse || 0.005);
+  findSyncPulse(samples: Float32Array, startPos: number, endPos: number = samples.length): number {
+    const mode = this.mode;
+    const syncDuration = Math.max(0.004, mode?.syncPulse ?? 0.005);
     const samplesPerCheck = Math.floor(this.sampleRate * 0.0002);
     const searchEnd = Math.min(endPos, samples.length - Math.floor(syncDuration * this.sampleRate));
     const expectedSync = FREQ_SYNC + (this.visFreqShift || 0);
@@ -698,7 +756,7 @@ export class SSTVDecoder {
     return -1;
   }
 
-  detectFrequency(samples, startIdx, duration) {
+  detectFrequency(samples: Float32Array, startIdx: number, duration: number): number {
     const numSamples = Math.floor(duration * this.sampleRate);
     const endIdx = Math.min(startIdx + numSamples, samples.length);
 
@@ -731,7 +789,7 @@ export class SSTVDecoder {
     return detectedFreq;
   }
 
-  goertzel(samples, startIdx, endIdx, targetFreq) {
+  goertzel(samples: Float32Array, startIdx: number, endIdx: number, targetFreq: number): number {
     const N = endIdx - startIdx;
     const k = (N * targetFreq) / this.sampleRate;
     const omega = (2 * Math.PI * k) / N;
@@ -741,7 +799,7 @@ export class SSTVDecoder {
     let s2 = 0;
 
     for (let i = startIdx; i < endIdx; i++) {
-      const s0 = samples[i] + coeff * s1 - s2;
+      const s0 = samples[i]! + coeff * s1 - s2;
       s2 = s1;
       s1 = s0;
     }

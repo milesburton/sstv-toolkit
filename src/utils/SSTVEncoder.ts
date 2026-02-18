@@ -1,4 +1,6 @@
-const SSTV_MODES = {
+import type { SSTVMode } from '../types.js';
+
+export const SSTV_MODES: Record<string, SSTVMode> = {
   ROBOT36: {
     name: 'Robot 36',
     visCode: 0x08,
@@ -57,27 +59,30 @@ const FREQ_VIS_START = 1900;
 const FREQ_VIS_STOP = 1200;
 
 export class SSTVEncoder {
-  constructor(mode = 'ROBOT36', sampleRate = 48000) {
-    this.mode = SSTV_MODES[mode];
+  readonly mode: SSTVMode;
+  readonly sampleRate: number;
+  private phase: number = 0;
+
+  constructor(mode: string = 'ROBOT36', sampleRate: number = 48000) {
+    const m = SSTV_MODES[mode];
+    if (!m) throw new Error(`Unknown SSTV mode: ${mode}`);
+    this.mode = m;
     this.sampleRate = sampleRate;
-    this.phase = 0;
   }
 
-  async encodeImage(imageFile) {
+  async encodeImage(imageFile: File): Promise<Blob> {
     const img = await this.loadImage(imageFile);
     const canvas = document.createElement('canvas');
     canvas.width = this.mode.width;
     canvas.height = this.mode.lines;
-
     const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Could not get canvas context');
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-
     return this.generateAudio(imageData);
   }
 
-  loadImage(file) {
+  private loadImage(file: File): Promise<HTMLImageElement> {
     return new Promise((resolve, reject) => {
       const img = new Image();
       const objectUrl = URL.createObjectURL(file);
@@ -93,36 +98,30 @@ export class SSTVEncoder {
     });
   }
 
-  generateAudio(imageData) {
-    const samples = [];
-
+  generateAudio(imageData: ImageData): Blob {
+    const samples: number[] = [];
     this.addVISCode(samples);
     this.addImageData(samples, imageData);
-
     return this.createWAV(samples);
   }
 
-  addVISCode(samples) {
+  addVISCode(samples: number[]): void {
     this.addTone(samples, 1900, 0.3);
     this.addTone(samples, 1200, 0.01);
     this.addTone(samples, FREQ_VIS_START, 0.03);
-
     const visCode = this.mode.visCode;
     let parity = 0;
-
     for (let i = 0; i < 7; i++) {
       const bit = (visCode >> i) & 1;
       parity ^= bit;
       this.addTone(samples, bit ? FREQ_VIS_BIT1 : FREQ_VIS_BIT0, 0.03);
     }
-
     this.addTone(samples, parity ? FREQ_VIS_BIT1 : FREQ_VIS_BIT0, 0.03);
     this.addTone(samples, FREQ_VIS_STOP, 0.03);
   }
 
-  addImageData(samples, imageData) {
+  private addImageData(samples: number[], imageData: ImageData): void {
     const { data, width, height } = imageData;
-
     if (this.mode.colorFormat === 'PD') {
       for (let y = 0; y < height; y += 2) {
         this.addScanLinePD(samples, data, width, y);
@@ -131,7 +130,6 @@ export class SSTVEncoder {
       for (let y = 0; y < height; y++) {
         this.addTone(samples, FREQ_SYNC, this.mode.syncPulse);
         this.addTone(samples, FREQ_BLACK, this.mode.syncPorch);
-
         if (this.mode.colorFormat === 'RGB') {
           this.addScanLine(samples, data, width, y, 1);
           if (this.mode.separatorPulse) this.addTone(samples, FREQ_SYNC, this.mode.separatorPulse);
@@ -145,9 +143,14 @@ export class SSTVEncoder {
     }
   }
 
-  addScanLine(samples, data, width, y, channel) {
+  private addScanLine(
+    samples: number[],
+    data: Uint8ClampedArray,
+    width: number,
+    y: number,
+    channel: number
+  ): void {
     const timePerPixel = this.mode.scanTime / width;
-
     for (let x = 0; x < width; x++) {
       const value = data[(y * width + x) * 4 + channel];
       const freq = FREQ_BLACK + (value / 255) * (FREQ_WHITE - FREQ_BLACK);
@@ -155,12 +158,11 @@ export class SSTVEncoder {
     }
   }
 
-  addScanLineYUV(samples, data, width, y) {
+  addScanLineYUV(samples: number[], data: Uint8ClampedArray, width: number, y: number): void {
     const Y_SCAN_TIME = 0.088;
     const SEPARATOR_TIME = 0.0045;
     const PORCH_TIME = 0.0015;
     const CHROMA_SCAN_TIME = 0.044;
-
     const yScanSamples = Math.floor(Y_SCAN_TIME * this.sampleRate);
 
     for (let x = 0; x < width; x++) {
@@ -168,7 +170,6 @@ export class SSTVEncoder {
       const Y = 0.299 * data[idx] + 0.587 * data[idx + 1] + 0.114 * data[idx + 2];
       const freq =
         FREQ_BLACK + (Math.max(0, Math.min(255, Math.round(Y))) / 255) * (FREQ_WHITE - FREQ_BLACK);
-
       const start = Math.floor((x / width) * yScanSamples);
       const end = Math.floor(((x + 1) / width) * yScanSamples);
       this.addTone(samples, freq, (end - start) / this.sampleRate);
@@ -185,30 +186,30 @@ export class SSTVEncoder {
       const chromaIndex = x / 2;
       const idx1 = (y * width + x) * 4;
       const idx2 = (y * width + Math.min(x + 1, width - 1)) * 4;
-
       const r = (data[idx1] + data[idx2]) / 2;
       const g = (data[idx1 + 1] + data[idx2 + 1]) / 2;
       const b = (data[idx1 + 2] + data[idx2 + 2]) / 2;
-
       const U = 128 + (-0.14713 * r - 0.28886 * g + 0.436 * b);
       const V = 128 + (0.615 * r - 0.51499 * g - 0.10001 * b);
       const chromaValue = Math.max(0, Math.min(255, Math.round(isVLine ? V : U)));
       const freq = FREQ_BLACK + (chromaValue / 255) * (FREQ_WHITE - FREQ_BLACK);
-
       const start = Math.floor((chromaIndex / halfWidth) * chromaScanSamples);
       const end = Math.floor(((chromaIndex + 1) / halfWidth) * chromaScanSamples);
       this.addTone(samples, freq, (end - start) / this.sampleRate);
     }
   }
 
-  addScanLinePD(samples, data, width, y) {
-    const COMPONENT_TIME = this.mode.componentTime;
+  private addScanLinePD(
+    samples: number[],
+    data: Uint8ClampedArray,
+    width: number,
+    y: number
+  ): void {
+    const COMPONENT_TIME = this.mode.componentTime!;
     const componentSamples = Math.floor(COMPONENT_TIME * this.sampleRate);
-
     this.addTone(samples, FREQ_SYNC, this.mode.syncPulse);
     this.addTone(samples, FREQ_BLACK, this.mode.syncPorch);
-
-    const encodeComponent = (getValue) => {
+    const encodeComponent = (getValue: (x: number) => number): void => {
       for (let x = 0; x < width; x++) {
         const value = Math.max(0, Math.min(255, Math.round(getValue(x))));
         const freq = FREQ_BLACK + (value / 255) * (FREQ_WHITE - FREQ_BLACK);
@@ -217,14 +218,11 @@ export class SSTVEncoder {
         this.addTone(samples, freq, (end - start) / this.sampleRate);
       }
     };
-
     const y1 = Math.min(y + 1, this.mode.lines - 1);
-
     encodeComponent((x) => {
       const idx = (y * width + x) * 4;
       return 0.299 * data[idx] + 0.587 * data[idx + 1] + 0.114 * data[idx + 2];
     });
-
     encodeComponent((x) => {
       const i0 = (y * width + x) * 4;
       const i1 = (y1 * width + x) * 4;
@@ -234,7 +232,6 @@ export class SSTVEncoder {
       const Y = 0.299 * r + 0.587 * g + 0.114 * b;
       return 128 + 0.701 * (r - Y);
     });
-
     encodeComponent((x) => {
       const i0 = (y * width + x) * 4;
       const i1 = (y1 * width + x) * 4;
@@ -244,29 +241,25 @@ export class SSTVEncoder {
       const Y = 0.299 * r + 0.587 * g + 0.114 * b;
       return 128 + 0.886 * (b - Y);
     });
-
     encodeComponent((x) => {
       const idx = (y1 * width + x) * 4;
       return 0.299 * data[idx] + 0.587 * data[idx + 1] + 0.114 * data[idx + 2];
     });
   }
 
-  addTone(samples, frequency, duration) {
+  addTone(samples: number[], frequency: number, duration: number): void {
     const numSamples = Math.floor(duration * this.sampleRate);
     const phaseIncrement = (2 * Math.PI * frequency) / this.sampleRate;
-
     for (let i = 0; i < numSamples; i++) {
       samples.push(Math.sin(this.phase));
       this.phase += phaseIncrement;
     }
-
     this.phase %= 2 * Math.PI;
   }
 
-  createWAV(samples) {
+  createWAV(samples: number[]): Blob {
     const buffer = new ArrayBuffer(44 + samples.length * 2);
     const view = new DataView(buffer);
-
     this.writeString(view, 0, 'RIFF');
     view.setUint32(4, 36 + samples.length * 2, true);
     this.writeString(view, 8, 'WAVE');
@@ -280,21 +273,17 @@ export class SSTVEncoder {
     view.setUint16(34, 16, true);
     this.writeString(view, 36, 'data');
     view.setUint32(40, samples.length * 2, true);
-
     let offset = 44;
     for (let i = 0; i < samples.length; i++) {
       view.setInt16(offset, Math.max(-1, Math.min(1, samples[i])) * 0x7fff, true);
       offset += 2;
     }
-
     return new Blob([buffer], { type: 'audio/wav' });
   }
 
-  writeString(view, offset, string) {
+  private writeString(view: DataView, offset: number, string: string): void {
     for (let i = 0; i < string.length; i++) {
       view.setUint8(offset + i, string.charCodeAt(i));
     }
   }
 }
-
-export { SSTV_MODES };

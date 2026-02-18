@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { SSTV_MODES, SSTVEncoder } from './SSTVEncoder';
+import { SSTV_MODES, SSTVEncoder } from './SSTVEncoder.js';
 
 describe('SSTVEncoder', () => {
-  let encoder;
+  let encoder: SSTVEncoder;
 
   beforeEach(() => {
     encoder = new SSTVEncoder('ROBOT36');
@@ -35,7 +35,7 @@ describe('SSTVEncoder', () => {
     });
 
     it('should create valid tone samples', () => {
-      const samples = [];
+      const samples: number[] = [];
       const frequency = 1500;
       const duration = 0.01; // 10ms
 
@@ -54,7 +54,7 @@ describe('SSTVEncoder', () => {
 
   describe('VIS Code', () => {
     it('should generate VIS code with correct structure', () => {
-      const samples = [];
+      const samples: number[] = [];
       encoder.addVISCode(samples);
 
       // VIS code should take about 300ms
@@ -68,7 +68,7 @@ describe('SSTVEncoder', () => {
 
   describe('Frequency Mapping', () => {
     it('should map black (0) to 1500 Hz', () => {
-      const samples = [];
+      const samples: number[] = [];
       encoder.addTone(samples, 1500, 0.01);
 
       // Check that samples represent a 1500 Hz tone
@@ -77,7 +77,7 @@ describe('SSTVEncoder', () => {
     });
 
     it('should map white (255) to 2300 Hz', () => {
-      const samples = [];
+      const samples: number[] = [];
       encoder.addTone(samples, 2300, 0.01);
 
       expect(samples.length).toBeGreaterThan(0);
@@ -97,7 +97,7 @@ describe('SSTVEncoder', () => {
 
   describe('YUV Full-Range Encoding', () => {
     it('should encode luminance full range: black→1500Hz, white→2300Hz', () => {
-      const samples = [];
+      const samples: number[] = [];
 
       const testData = new Uint8ClampedArray([0, 0, 0, 255, 255, 255, 255, 255]);
 
@@ -106,7 +106,7 @@ describe('SSTVEncoder', () => {
     });
 
     it('should encode chrominance for saturated colours', () => {
-      const samples = [];
+      const samples: number[] = [];
 
       const redData = new Uint8ClampedArray([255, 0, 0, 255, 255, 0, 0, 255]);
       encoder.addScanLineYUV(samples, redData, 2, 0);
@@ -119,7 +119,7 @@ describe('SSTVEncoder', () => {
     });
 
     it('should encode neutral gray with U=V=128 (chroma center)', () => {
-      const samples = [];
+      const samples: number[] = [];
       const grayData = new Uint8ClampedArray([128, 128, 128, 255, 128, 128, 128, 255]);
       encoder.addScanLineYUV(samples, grayData, 2, 0);
       expect(samples.length).toBeGreaterThan(0);
@@ -136,7 +136,7 @@ describe('SSTVEncoder', () => {
       ];
 
       testColors.forEach(({ r, g, b }) => {
-        const samples = [];
+        const samples: number[] = [];
         const pixelData = new Uint8ClampedArray([r, g, b, 255, r, g, b, 255]);
         expect(() => {
           encoder.addScanLineYUV(samples, pixelData, 2, 0);

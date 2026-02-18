@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { SSTVDecoder } from './SSTVDecoder';
+import { SSTVDecoder } from './SSTVDecoder.js';
 
 describe('SSTVDecoder', () => {
-  let decoder;
+  let decoder: SSTVDecoder;
 
   beforeEach(() => {
     decoder = new SSTVDecoder();

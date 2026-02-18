@@ -1,33 +1,33 @@
 export class Complex {
-  constructor(real = 0, imag = 0) {
-    this.real = real;
-    this.imag = imag;
-  }
+  constructor(
+    public real: number = 0,
+    public imag: number = 0
+  ) {}
 
-  mul(other) {
+  mul(other: Complex): Complex {
     return new Complex(
       this.real * other.real - this.imag * other.imag,
       this.real * other.imag + this.imag * other.real
     );
   }
 
-  add(other) {
+  add(other: Complex): Complex {
     return new Complex(this.real + other.real, this.imag + other.imag);
   }
 
-  scale(scalar) {
+  scale(scalar: number): Complex {
     return new Complex(this.real * scalar, this.imag * scalar);
   }
 
-  arg() {
+  arg(): number {
     return Math.atan2(this.imag, this.real);
   }
 
-  abs() {
+  abs(): number {
     return Math.sqrt(this.real * this.real + this.imag * this.imag);
   }
 
-  static fromPolar(magnitude, phase) {
+  static fromPolar(magnitude: number, phase: number): Complex {
     return new Complex(magnitude * Math.cos(phase), magnitude * Math.sin(phase));
   }
 }
