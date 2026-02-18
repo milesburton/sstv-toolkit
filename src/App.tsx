@@ -1,8 +1,11 @@
+import { useState } from 'react';
 import { DecoderPanel } from './components/DecoderPanel.js';
 import { EncoderPanel } from './components/EncoderPanel.js';
 import { GalleryPanel } from './components/GalleryPanel.js';
 
 export default function App() {
+  const [decodeUrl, setDecodeUrl] = useState<string | null>(null);
+
   return (
     <div className="w-full max-w-6xl mx-auto px-8 py-8">
       <header className="text-center text-white mb-8">
@@ -14,10 +17,10 @@ export default function App() {
 
       <main className="bg-white rounded-xl shadow-card p-8 mb-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
         <EncoderPanel />
-        <DecoderPanel />
+        <DecoderPanel triggerUrl={decodeUrl} onTriggerConsumed={() => setDecodeUrl(null)} />
       </main>
 
-      <GalleryPanel />
+      <GalleryPanel onTryDecode={setDecodeUrl} />
 
       <footer className="text-center text-white opacity-90 py-4">
         <p>

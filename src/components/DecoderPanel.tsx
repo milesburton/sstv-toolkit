@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { DecodeResult } from '../types.js';
 import { SSTVDecoder } from '../utils/SSTVDecoder.js';
 import { DiagnosticsPanel } from './DiagnosticsPanel.js';
@@ -11,10 +11,45 @@ interface DecodeState {
   diagnostics: DecodeResult['diagnostics'];
 }
 
-export function DecoderPanel() {
+interface Props {
+  triggerUrl?: string | null;
+  onTriggerConsumed?: () => void;
+}
+
+export function DecoderPanel({ triggerUrl, onTriggerConsumed }: Props) {
   const [processing, setProcessing] = useState(false);
   const [result, setResult] = useState<DecodeState | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  const decodeUrl = useCallback(async (url: string) => {
+    setProcessing(true);
+    setError(null);
+    setResult(null);
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const file = new File([blob], url.split('/').pop() ?? 'audio', { type: blob.type });
+      const decoder = new SSTVDecoder();
+      const decoded = await decoder.decodeAudio(file);
+      setResult({
+        url: decoded.imageUrl,
+        filename: `sstv_decoded_${Date.now()}.png`,
+        diagnostics: decoded.diagnostics,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Decoding failed');
+    } finally {
+      setProcessing(false);
+      onTriggerConsumed?.();
+    }
+  }, [onTriggerConsumed]);
+
+  useEffect(() => {
+    if (!triggerUrl) return;
+    panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    decodeUrl(triggerUrl);
+  }, [triggerUrl, decodeUrl]);
 
   const handleFile = async (file: File) => {
     if (!file.type.startsWith('audio/')) {
@@ -55,7 +90,7 @@ export function DecoderPanel() {
   const verdict = result?.diagnostics?.quality?.verdict;
 
   return (
-    <div className="bg-transparent">
+    <div ref={panelRef} className="bg-transparent">
       <div className="text-center mb-6 pb-4 border-b-2 border-gray-200">
         <h2 className="text-primary text-2xl font-semibold mb-2">📻 Decoder</h2>
         <p className="text-gray-500 text-sm">SSTV Audio → Image</p>
