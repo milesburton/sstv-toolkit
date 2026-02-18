@@ -12,10 +12,10 @@ describe('SSTV Integration Tests', () => {
       expect(samples.length).toBeGreaterThan(0);
 
       let zeroCrossings = 0;
-      let lastSign = samples[0]! >= 0;
+      let lastSign = (samples[0] ?? 0) >= 0;
 
       for (let i = 1; i < samples.length; i++) {
-        const sign = samples[i]! >= 0;
+        const sign = (samples[i] ?? 0) >= 0;
         if (sign !== lastSign) {
           zeroCrossings++;
           lastSign = sign;

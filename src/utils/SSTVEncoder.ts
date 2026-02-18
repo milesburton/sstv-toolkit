@@ -205,7 +205,7 @@ export class SSTVEncoder {
     width: number,
     y: number
   ): void {
-    const COMPONENT_TIME = this.mode.componentTime!;
+    const COMPONENT_TIME = this.mode.componentTime ?? 0;
     const componentSamples = Math.floor(COMPONENT_TIME * this.sampleRate);
     this.addTone(samples, FREQ_SYNC, this.mode.syncPulse);
     this.addTone(samples, FREQ_BLACK, this.mode.syncPorch);

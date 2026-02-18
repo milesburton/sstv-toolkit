@@ -29,7 +29,7 @@ export class KaiserFIR {
       this.taps[i] /= sum;
     }
 
-    this.buffer = new Array<Complex>(numTaps).fill(null!).map(() => new Complex(0, 0));
+    this.buffer = Array.from({ length: numTaps }, () => new Complex(0, 0));
   }
 
   private kaiser(n: number, N: number, beta: number): number {
