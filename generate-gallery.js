@@ -2,21 +2,36 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createCanvas } from 'canvas';
 
 const EXAMPLES = [
-  { name: 'ISS Robot 36', file: 'iss-test.wav' },
-  { name: 'ISS PD120', file: 'Space_Comms_PD120_SSTV_Test_Recording.mp3' },
+  { name: 'ISS PD120', file: 'iss-test.wav' },
+  { name: 'Space Comms Martin M1', file: 'Space_Comms_PD120_SSTV_Test_Recording.mp3' },
   { name: 'Colour bars', file: 'test-colorbars.wav' },
 ];
+
+function findWavDataOffset(buffer) {
+  const view = new DataView(buffer);
+  // Walk chunks starting after the 12-byte RIFF header
+  let offset = 12;
+  while (offset + 8 <= buffer.byteLength) {
+    const id =
+      String.fromCharCode(view.getUint8(offset), view.getUint8(offset + 1), view.getUint8(offset + 2), view.getUint8(offset + 3));
+    const size = view.getUint32(offset + 4, true);
+    if (id === 'data') return offset + 8;
+    offset += 8 + size;
+  }
+  return 44; // fallback
+}
 
 class MockAudioContext {
   constructor() {
     this.sampleRate = 48000;
   }
   decodeAudioData(arrayBuffer) {
+    const dataOffset = findWavDataOffset(arrayBuffer);
     const view = new DataView(arrayBuffer);
-    const numSamples = (arrayBuffer.byteLength - 44) / 2;
+    const numSamples = (arrayBuffer.byteLength - dataOffset) / 2;
     const samples = new Float32Array(numSamples);
     for (let i = 0; i < numSamples; i++) {
-      samples[i] = view.getInt16(44 + i * 2, true) / 32768.0;
+      samples[i] = view.getInt16(dataOffset + i * 2, true) / 32768.0;
     }
     return Promise.resolve({ sampleRate: this.sampleRate, getChannelData: () => samples });
   }

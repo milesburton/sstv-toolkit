@@ -1,13 +1,13 @@
 [
   {
-    "name": "ISS Robot 36",
+    "name": "ISS PD120",
     "audioFile": "examples/iss-test.wav",
     "imageFile": "gallery/iss-test-wav.png",
-    "mode": "Robot 36",
+    "mode": "PD 120",
     "quality": "good"
   },
   {
-    "name": "ISS PD120",
+    "name": "Space Comms Martin M1",
     "audioFile": "examples/Space_Comms_PD120_SSTV_Test_Recording.mp3",
     "imageFile": "gallery/space-comms-pd120-sstv-test-recording-mp3.png",
     "mode": "Martin M1",

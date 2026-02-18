@@ -11,16 +11,29 @@ import { readFileSync } from 'node:fs';
 import { createCanvas, Image } from 'canvas';
 import { beforeAll, describe, expect, it } from 'vitest';
 
+function findWavDataOffset(buffer) {
+  const view = new DataView(buffer);
+  let offset = 12;
+  while (offset + 8 <= buffer.byteLength) {
+    const id = String.fromCharCode(view.getUint8(offset), view.getUint8(offset + 1), view.getUint8(offset + 2), view.getUint8(offset + 3));
+    const size = view.getUint32(offset + 4, true);
+    if (id === 'data') return offset + 8;
+    offset += 8 + size;
+  }
+  return 44;
+}
+
 class MockAudioContext {
   constructor() {
     this.sampleRate = 48000;
   }
   decodeAudioData(arrayBuffer) {
+    const dataOffset = findWavDataOffset(arrayBuffer);
     const view = new DataView(arrayBuffer);
-    const numSamples = (arrayBuffer.byteLength - 44) / 2;
+    const numSamples = (arrayBuffer.byteLength - dataOffset) / 2;
     const samples = new Float32Array(numSamples);
     for (let i = 0; i < numSamples; i++) {
-      samples[i] = view.getInt16(44 + i * 2, true) / 32768.0;
+      samples[i] = view.getInt16(dataOffset + i * 2, true) / 32768.0;
     }
     return Promise.resolve({
       sampleRate: this.sampleRate,
