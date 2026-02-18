@@ -156,5 +156,5 @@ describe('ISS SSTV Decode Test', () => {
 
     // Should have reasonable amount of normal pixels
     expect(normalPercent).toBeGreaterThan(15); // Relaxed for noisy ISS signal
-  }, 30000); // 30 second timeout
+  }, 120000); // PD120 decoding is slower than Robot36 — allow 2 minutes
 });

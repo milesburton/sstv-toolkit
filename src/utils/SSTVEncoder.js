@@ -12,7 +12,7 @@ const SSTV_MODES = {
   },
   PD120: {
     name: 'PD 120',
-    visCode: 0x5d,
+    visCode: 0x5f,
     scanTime: 0.532,
     lines: 496,
     width: 640,

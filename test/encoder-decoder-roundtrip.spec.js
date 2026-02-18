@@ -35,7 +35,9 @@ beforeAll(async () => {
 
   global.document = {
     createElement: (tag) => {
-      if (tag === 'canvas') return createCanvas(320, 240);
+      // node-canvas supports mutable width/height, so a single canvas
+      // works for both 320x240 (Robot36) and 640x496 (PD120).
+      if (tag === 'canvas') return createCanvas(640, 496);
       return {};
     },
   };
@@ -304,4 +306,77 @@ describe('Encoder-Decoder Round-Trip', () => {
 
     console.log(`   ✅ Color blocks test PASSED\n`);
   }, 60000);
+
+  it('should encode and decode PD120 colored blocks correctly', async () => {
+    const canvas = createCanvas(640, 496);
+    const ctx = canvas.getContext('2d');
+
+    ctx.fillStyle = 'rgb(255, 0, 0)';
+    ctx.fillRect(0, 0, 320, 248);
+    ctx.fillStyle = 'rgb(0, 0, 255)';
+    ctx.fillRect(320, 248, 320, 248);
+    ctx.fillStyle = 'rgb(128, 128, 128)';
+    ctx.fillRect(320, 0, 320, 248);
+    ctx.fillRect(0, 248, 320, 248);
+
+    const imageData = ctx.getImageData(0, 0, 640, 496);
+
+    console.log('\n🎨 Encoding PD120 colored blocks...');
+    const encoder = new SSTVEncoder('PD120', 48000);
+    const audioBlob = encoder.generateAudio(imageData);
+    console.log(`✓ Encoded: ${audioBlob.size} bytes`);
+
+    console.log('🔊 Decoding PD120...');
+    const decoder = new SSTVDecoder(48000, { autoCalibrate: false });
+    const decoded = await decoder.decodeAudio(audioBlob);
+    const resultDataUrl = typeof decoded === 'string' ? decoded : decoded.imageUrl;
+
+    const base64Data = resultDataUrl.replace(/^data:image\/png;base64,/, '');
+    const pngBuffer = Buffer.from(base64Data, 'base64');
+
+    const { Image } = await import('canvas');
+    const img = new Image();
+    await new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = reject;
+      img.src = pngBuffer;
+    });
+
+    const resultCanvas = createCanvas(img.width, img.height);
+    const resultCtx = resultCanvas.getContext('2d');
+    resultCtx.drawImage(img, 0, 0);
+    const resultImageData = resultCtx.getImageData(0, 0, img.width, img.height);
+    const pixels = resultImageData.data;
+    const W = img.width;
+
+    const sample = (x, y) => {
+      const idx = (y * W + x) * 4;
+      return { r: pixels[idx], g: pixels[idx + 1], b: pixels[idx + 2] };
+    };
+
+    const red = sample(160, 124);
+    const blue = sample(480, 372);
+    const gray = sample(480, 124);
+
+    console.log(`\n📊 PD120 Round-Trip Results:`);
+    console.log(`   Red block:  R=${red.r}, G=${red.g}, B=${red.b}`);
+    console.log(`   Blue block: R=${blue.r}, G=${blue.g}, B=${blue.b}`);
+    console.log(`   Gray block: R=${gray.r}, G=${gray.g}, B=${gray.b}`);
+
+    // PD120 uses Y+R-Y/B-Y colour space; expect good colour separation but
+    // some loss is inherent from the analogue FM encoding at 640px/121.6ms.
+    expect(red.r).toBeGreaterThan(150);
+    expect(red.g).toBeLessThan(80);
+    expect(red.b).toBeLessThan(50);
+
+    expect(blue.b).toBeGreaterThan(120);
+    expect(blue.r).toBeLessThan(50);
+    expect(blue.g).toBeLessThan(60);
+
+    expect(gray.r).toBeGreaterThan(100);
+    expect(gray.r).toBeLessThan(155);
+    expect(Math.abs(gray.r - gray.g) + Math.abs(gray.g - gray.b)).toBeLessThan(40);
+
+    console.log(`   ✅ PD120 round-trip test PASSED\n`);
+  }, 120000);
 });

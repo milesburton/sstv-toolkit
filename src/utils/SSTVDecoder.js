@@ -52,15 +52,15 @@ export class SSTVDecoder {
         const breakFreq = freq;
         const checkStep = Math.floor(0.005 * this.sampleRate);
 
-        // Quick leader check: 200ms before the candidate must look like 1900Hz.
-        // This single fast check rejects most false positives in noise before the
-        // expensive break-boundary scan. Parity checking catches anything that slips through.
-        if (i < Math.floor(0.15 * this.sampleRate)) continue; // need at least 150ms before
+        // Leader check: two sample points (at 200ms and 100ms before) must both
+        // look like 1900Hz. Two independent measurements reduce accidental noise
+        // matches substantially compared to a single check, at modest extra cost.
+        if (i < Math.floor(0.25 * this.sampleRate)) continue;
         {
           const expectedLeader = 1900 + (breakFreq - 1200);
-          const checkPos = Math.max(0, i - Math.floor(0.2 * this.sampleRate));
-          const leaderFreq = this.detectFrequency(samples, checkPos, 0.02);
-          if (Math.abs(leaderFreq - expectedLeader) > 200) continue;
+          const f1 = this.detectFrequency(samples, Math.max(0, i - Math.floor(0.2 * this.sampleRate)), 0.02);
+          const f2 = this.detectFrequency(samples, Math.max(0, i - Math.floor(0.1 * this.sampleRate)), 0.02);
+          if (Math.abs(f1 - expectedLeader) > 200 || Math.abs(f2 - expectedLeader) > 200) continue;
         }
 
         // Scan backward to find the actual break start (handles mid-break entry).
@@ -148,8 +148,73 @@ export class SSTVDecoder {
       }
     }
 
+    // No VIS matched. Attempt timing-based mode detection by measuring the
+    // period between consecutive sync pulses in the first few seconds.
+    const timingMode = this.detectModeByTiming(samples);
+    if (timingMode) return timingMode;
+
     this.visFreqShift = 0;
     return SSTV_MODES.ROBOT36;
+  }
+
+  detectModeByTiming(samples) {
+    // Find a sustained 1900Hz leader (at least 200ms), then scan forward from
+    // its end for repeating 1200Hz sync pulses and measure the period.
+    // This avoids false matches from noise-generated 1200Hz candidates.
+    const scanLimit = Math.min(samples.length, this.sampleRate * 60);
+    const chunkSamples = Math.floor(0.05 * this.sampleRate); // 50ms chunks
+    const minLeaderChunks = 4; // need 200ms of sustained 1900Hz
+
+    let leaderEnd = -1;
+    let runCount = 0;
+    for (let i = 0; i < scanLimit; i += chunkSamples) {
+      const f = this.detectFrequency(samples, i, 0.05);
+      if (Math.abs(f - 1900) < 150) {
+        runCount++;
+        if (runCount >= minLeaderChunks) leaderEnd = i + chunkSamples;
+      } else {
+        if (runCount >= minLeaderChunks && leaderEnd > 0) break;
+        runCount = 0;
+      }
+    }
+    if (leaderEnd === -1) return null;
+
+    // Skip the VIS section (break + bits + porch ≈ 500ms) then scan for
+    // repeating 1200Hz image sync pulses within the next 3s.
+    const visSkip = Math.floor(0.5 * this.sampleRate);
+    const step = Math.floor(this.sampleRate * 0.002);
+    const searchStart = leaderEnd + visSkip;
+    const maxSearch = Math.min(samples.length, searchStart + Math.floor(3 * this.sampleRate));
+
+    const syncs = [];
+    let lastSync = -1;
+    for (let i = searchStart; i < maxSearch; i += step) {
+      const f = this.detectFrequency(samples, i, 0.005);
+      if (Math.abs(f - 1200) < 100) {
+        if (lastSync === -1 || i - lastSync > Math.floor(0.05 * this.sampleRate)) {
+          syncs.push(i);
+          lastSync = i;
+          if (syncs.length >= 3) break;
+        }
+      }
+    }
+    if (syncs.length < 2) return null;
+
+    const period = (syncs[syncs.length - 1] - syncs[0]) / ((syncs.length - 1) * this.sampleRate);
+
+    // Match measured period to known modes within 10% tolerance.
+    for (const [, mode] of Object.entries(SSTV_MODES)) {
+      const expected =
+        mode.colorFormat === 'PD'
+          ? mode.componentTime * 4 + mode.syncPulse + mode.syncPorch
+          : mode.scanTime;
+      if (Math.abs(period - expected) / expected < 0.1) {
+        this.visEndPos = syncs[0];
+        this.visFreqShift = 0;
+        return mode;
+      }
+    }
+    return null;
   }
 
   decodeVIS(samples, startIdx, freqShift = 0) {
@@ -170,7 +235,7 @@ export class SSTVDecoder {
     // A mismatched parity strongly indicates a false VIS detection.
     const parityFreq = this.detectFrequency(samples, idx, 0.03);
     const parityBit = parityFreq < 1200 + freqShift ? 1 : 0;
-    this.lastVisParityOk = (ones % 2) === parityBit;
+    this.lastVisParityOk = ones % 2 === parityBit;
 
     return visCode;
   }
@@ -518,17 +583,24 @@ export class SSTVDecoder {
     const y1 = Math.min(y + 1, lines - 1);
     const totalSamples = Math.floor(COMPONENT_TIME * this.sampleRate);
 
+    const pixelSamples = totalSamples / width;
+    const minWindowSamples = Math.max(96, Math.floor(pixelSamples) * 4);
+
     const decodeComponent = (baseOffset) => {
       const result = [];
-      let position = startPos + baseOffset;
+      const componentStart = startPos + baseOffset;
       for (let x = 0; x < width; x++) {
         const startSample = Math.floor((x / width) * totalSamples);
         const endSample = Math.floor(((x + 1) / width) * totalSamples);
-        const duration = (endSample - startSample) / this.sampleRate;
-        const freq = this.detectFrequencyRange(samples, position, duration);
+        const pos = componentStart + startSample;
+        const windowEnd = Math.min(
+          componentStart + totalSamples,
+          pos + Math.max(endSample - startSample, minWindowSamples)
+        );
+        const duration = (windowEnd - pos) / this.sampleRate;
+        const freq = this.detectFrequencyRange(samples, pos, duration);
         const normalized = (freq - FREQ_BLACK) / (FREQ_WHITE - FREQ_BLACK);
         result.push(Math.max(0, Math.min(255, Math.round(normalized * 255))));
-        position += endSample - startSample;
       }
       return result;
     };

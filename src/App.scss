@@ -243,6 +243,30 @@ main.side-by-side {
     font-size: 0.8rem;
     color: #999;
   }
+
+  .examples {
+    margin-top: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  .examples-label {
+    font-size: 0.75rem;
+    color: #999;
+    margin: 0;
+  }
+
+  .example-link {
+    font-size: 0.8rem;
+    color: $color-primary;
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
 }
 
 // ── Spinner ──────────────────────────────────────────────────────────────────

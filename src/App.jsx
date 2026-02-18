@@ -436,6 +436,18 @@ function App() {
                     Choose Audio File
                   </button>
                   <p className="hint">WAV, MP3, OGG</p>
+                  <div className="examples">
+                    <p className="examples-label">Try an example:</p>
+                    <a href="examples/iss-test.wav" download className="example-link">
+                      ISS Robot 36 (.wav)
+                    </a>
+                    <a href="examples/Space_Comms_PD120_SSTV_Test_Recording.mp3" download className="example-link">
+                      ISS PD120 (.mp3)
+                    </a>
+                    <a href="examples/test-colorbars.wav" download className="example-link">
+                      Colour bars (.wav)
+                    </a>
+                  </div>
                 </>
               )}
             </label>
