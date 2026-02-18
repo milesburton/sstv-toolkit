@@ -53,6 +53,8 @@ export interface DecodeState {
   url: string;
   filename: string;
   diagnostics: DecodeDiagnostics;
+  enhancedUrl?: string;
+  cloudinaryPublicId?: string;
 }
 
 export interface GalleryEntry {
