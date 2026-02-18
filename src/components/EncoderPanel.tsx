@@ -118,7 +118,7 @@ export function EncoderPanel() {
         onFile={handleFile}
         processing={processing}
         icon={<ImageIcon />}
-        hint="JPG, PNG, GIF, WebP"
+        hint=""
         inputId="encode-input"
       />
 

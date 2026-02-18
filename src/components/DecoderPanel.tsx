@@ -115,8 +115,8 @@ export function DecoderPanel({ triggerUrl, onTriggerConsumed }: Props) {
         <p className="text-white/40 text-xs uppercase tracking-widest">SSTV Audio → Image</p>
       </div>
 
-      <div className="mb-5 text-center">
-        <p className="text-white/40 text-xs uppercase tracking-wider font-medium">
+      <div className="mb-5 flex items-center justify-center gap-3 text-sm">
+        <p className="text-white/50 text-xs uppercase tracking-wider font-medium">
           Automatic mode detection via VIS code
         </p>
       </div>
@@ -126,34 +126,9 @@ export function DecoderPanel({ triggerUrl, onTriggerConsumed }: Props) {
         onFile={handleFile}
         processing={processing}
         icon={<AudioIcon />}
-        hint="WAV, MP3, OGG"
+        hint=""
         inputId="decode-input"
-      >
-        <div className="mt-3 flex flex-col items-center gap-1">
-          <p className="text-xs text-white/30">Try an example:</p>
-          <a
-            href="examples/iss-test.wav"
-            download
-            className="text-xs text-primary/70 hover:text-primary transition-colors"
-          >
-            ISS Robot 36 (.wav)
-          </a>
-          <a
-            href="examples/Space_Comms_PD120_SSTV_Test_Recording.mp3"
-            download
-            className="text-xs text-primary/70 hover:text-primary transition-colors"
-          >
-            ISS PD120 (.mp3)
-          </a>
-          <a
-            href="examples/test-colorbars.wav"
-            download
-            className="text-xs text-primary/70 hover:text-primary transition-colors"
-          >
-            Colour bars (.wav)
-          </a>
-        </div>
-      </DropZone>
+      />
 
       {error && (
         <div className="border border-red-500/30 bg-red-500/10 rounded-lg p-3 my-4 text-red-400 text-center text-sm">

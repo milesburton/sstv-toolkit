@@ -72,7 +72,7 @@ export function DropZone({ accept, onFile, processing, icon, hint, inputId, chil
             >
               Choose File
             </button>
-            <p className="text-white/30 text-xs mt-3">{hint}</p>
+            {hint && <p className="text-white/30 text-xs mt-3">{hint}</p>}
             {children}
           </>
         )}
