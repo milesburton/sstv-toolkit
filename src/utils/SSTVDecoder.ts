@@ -1,4 +1,10 @@
-import type { DecodeDiagnostics, DecodeResult, ImageQuality, SSTVMode } from '../types.js';
+import type {
+  DecodeDiagnostics,
+  DecodeImageResult,
+  DecodeResult,
+  ImageQuality,
+  SSTVMode,
+} from '../types.js';
 import { SSTV_MODES } from './SSTVEncoder.js';
 
 const FREQ_SYNC = 1200;
@@ -34,27 +40,43 @@ export class SSTVDecoder {
   }
 
   async decodeAudio(audioFile: { arrayBuffer(): Promise<ArrayBuffer> }): Promise<DecodeResult> {
-    const audioContext = new (
-      window.AudioContext ||
-      (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
-    )({
-      sampleRate: 48000,
-    });
     const arrayBuffer = await audioFile.arrayBuffer();
+    const result = await this.decodeAudioBuffer(arrayBuffer);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = result.width;
+    canvas.height = result.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Could not get canvas context');
+    const imageData = ctx.createImageData(result.width, result.height);
+    imageData.data.set(result.pixels);
+    ctx.putImageData(imageData, 0, 0);
+
+    return { imageUrl: canvas.toDataURL('image/png'), diagnostics: result.diagnostics };
+  }
+
+  async decodeAudioBuffer(arrayBuffer: ArrayBuffer): Promise<DecodeImageResult> {
+    const audioCtxCtor: typeof AudioContext =
+      (typeof window !== 'undefined'
+        ? window.AudioContext ||
+          (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+        : (self as unknown as { AudioContext: typeof AudioContext }).AudioContext) as typeof AudioContext;
+
+    const audioContext = new audioCtxCtor({ sampleRate: 48000 });
     const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
 
     const samples = audioBuffer.getChannelData(0);
     this.sampleRate = audioBuffer.sampleRate;
     audioContext.close();
 
+    return this.decodeSamples(samples);
+  }
+
+  decodeSamples(samples: Float32Array): DecodeImageResult {
     this.mode = this.detectMode(samples);
 
     if (!this.mode) {
       throw new Error('Could not detect SSTV mode. Try manually selecting a mode.');
-    }
-
-    if (typeof window !== 'undefined') {
-      console.log('SSTV Mode detected:', this.mode.name);
     }
 
     return this.decodeImage(samples, {
@@ -246,17 +268,16 @@ export class SSTVDecoder {
   decodeImage(
     samples: Float32Array,
     audioMeta: { sampleRate?: number; fileDuration?: number } = {}
-  ): DecodeResult {
+  ): DecodeImageResult {
     const decodeStart = Date.now();
     if (!this.mode) throw new Error('No SSTV mode set');
     const mode = this.mode;
-    const canvas = document.createElement('canvas');
-    canvas.width = mode.width;
-    canvas.height = mode.lines;
 
-    const ctx = canvas.getContext('2d');
-    if (!ctx) throw new Error('Could not get canvas context');
-    const imageData = ctx.createImageData(canvas.width, canvas.height);
+    const imageData = {
+      data: new Uint8ClampedArray(mode.width * mode.lines * 4),
+      width: mode.width,
+      height: mode.lines,
+    } as ImageData;
 
     for (let i = 0; i < imageData.data.length; i += 4) {
       imageData.data[i] = 0;
@@ -356,10 +377,7 @@ export class SSTVDecoder {
       this.convertPDtoRGB(imageData, chromaU, chromaV);
     }
 
-    ctx.putImageData(imageData, 0, 0);
-
-    const imageUrl = canvas.toDataURL('image/png');
-    const quality = this.analyzeImageQuality(ctx, canvas.width, canvas.height);
+    const quality = this.analyzeImageQuality(imageData.data, mode.width, mode.lines);
 
     const diagnostics: DecodeDiagnostics = {
       mode: mode.name,
@@ -373,12 +391,10 @@ export class SSTVDecoder {
       quality,
     };
 
-    return { imageUrl, diagnostics };
+    return { pixels: imageData.data, width: mode.width, height: mode.lines, diagnostics };
   }
 
-  analyzeImageQuality(ctx: CanvasRenderingContext2D, width: number, height: number): ImageQuality {
-    const imageData = ctx.getImageData(0, 0, width, height);
-    const data = imageData.data;
+  analyzeImageQuality(data: Uint8ClampedArray, width: number, height: number): ImageQuality {
     let rSum = 0;
     let gSum = 0;
     let bSum = 0;

@@ -38,6 +38,33 @@ export interface DecodeResult {
   diagnostics: DecodeDiagnostics;
 }
 
+export interface DecodeImageResult {
+  pixels: Uint8ClampedArray;
+  width: number;
+  height: number;
+  diagnostics: DecodeDiagnostics;
+}
+
+export interface WorkerDecodeRequest {
+  type: 'decode';
+  buffer: ArrayBuffer;
+}
+
+export interface WorkerResultMessage {
+  type: 'result';
+  pixels: Uint8ClampedArray;
+  width: number;
+  height: number;
+  diagnostics: DecodeDiagnostics;
+}
+
+export interface WorkerErrorMessage {
+  type: 'error';
+  message: string;
+}
+
+export type WorkerOutboundMessage = WorkerResultMessage | WorkerErrorMessage;
+
 export interface EncodeResult {
   url: string;
   filename: string;

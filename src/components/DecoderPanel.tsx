@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { DecodeState } from '../types.js';
-import { SSTVDecoder } from '../utils/SSTVDecoder.js';
+import type { DecodeState, WorkerOutboundMessage } from '../types.js';
+import DecoderWorker from '../workers/decoderWorker.js?worker';
 import { DropZone } from './DropZone.js';
 
 interface Props {
@@ -27,6 +27,33 @@ const AudioIcon = () => (
   </svg>
 );
 
+function decodeWithWorker(buffer: ArrayBuffer): Promise<WorkerOutboundMessage> {
+  return new Promise((resolve) => {
+    const worker = new DecoderWorker();
+    worker.onmessage = (event: MessageEvent<WorkerOutboundMessage>) => {
+      worker.terminate();
+      resolve(event.data);
+    };
+    worker.onerror = (event: ErrorEvent) => {
+      worker.terminate();
+      resolve({ type: 'error', message: event.message ?? 'Worker error' });
+    };
+    worker.postMessage({ type: 'decode', buffer }, [buffer]);
+  });
+}
+
+function pixelsToDataUrl(pixels: Uint8ClampedArray, width: number, height: number): string {
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Could not get canvas context');
+  const imageData = ctx.createImageData(width, height);
+  imageData.data.set(pixels);
+  ctx.putImageData(imageData, 0, 0);
+  return canvas.toDataURL('image/png');
+}
+
 export function DecoderPanel({ triggerUrl, onTriggerConsumed, onResult, onError, onReset }: Props) {
   const [processing, setProcessing] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -36,13 +63,19 @@ export function DecoderPanel({ triggerUrl, onTriggerConsumed, onResult, onError,
       setProcessing(true);
       onReset();
       try {
-        const decoder = new SSTVDecoder();
-        const decoded = await decoder.decodeAudio(file);
-        onResult({
-          url: decoded.imageUrl,
-          filename: `sstv_decoded_${Date.now()}.png`,
-          diagnostics: decoded.diagnostics,
-        });
+        const buffer = await file.arrayBuffer();
+        const msg = await decodeWithWorker(buffer);
+
+        if (msg.type === 'error') {
+          onError(msg.message);
+        } else {
+          const imageUrl = pixelsToDataUrl(msg.pixels, msg.width, msg.height);
+          onResult({
+            url: imageUrl,
+            filename: `sstv_decoded_${Date.now()}.png`,
+            diagnostics: msg.diagnostics,
+          });
+        }
       } catch (err) {
         onError(err instanceof Error ? err.message : 'Decoding failed');
       } finally {

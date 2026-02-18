@@ -1,18 +1,14 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { WorkerOutboundMessage } from '../types.js';
 
-const mockDecodeAudio = vi.fn();
+const GOOD_PIXELS = new Uint8ClampedArray(320 * 240 * 4).fill(128);
 
-vi.mock('../utils/SSTVDecoder.js', () => ({
-  SSTVDecoder: class {
-    decodeAudio = mockDecodeAudio;
-  },
-}));
-
-import { DecoderPanel } from './DecoderPanel.js';
-
-const GOOD_RESULT = {
-  imageUrl: 'data:image/png;base64,abc123',
+const GOOD_RESULT: WorkerOutboundMessage = {
+  type: 'result',
+  pixels: GOOD_PIXELS,
+  width: 320,
+  height: 240,
   diagnostics: {
     mode: 'Robot 36',
     visCode: 0x08,
@@ -33,11 +29,42 @@ const GOOD_RESULT = {
   },
 };
 
+const { workerState } = vi.hoisted(() => {
+  const workerState = {
+    nextResult: null as WorkerOutboundMessage | null,
+    messageHandler: null as ((event: MessageEvent<WorkerOutboundMessage>) => void) | null,
+  };
+  return { workerState };
+});
+
+vi.mock('../workers/decoderWorker.js?worker', () => ({
+  default: class MockWorker {
+    set onmessage(handler: (event: MessageEvent<WorkerOutboundMessage>) => void) {
+      workerState.messageHandler = handler;
+    }
+    set onerror(_handler: (event: ErrorEvent) => void) {
+      /* intentional no-op */
+    }
+    postMessage(_data: unknown, _transfer?: Transferable[]) {
+      const result = workerState.nextResult;
+      Promise.resolve().then(() => {
+        workerState.messageHandler?.({ data: result } as MessageEvent<WorkerOutboundMessage>);
+      });
+    }
+    terminate() {
+      /* intentional no-op */
+    }
+  },
+}));
+
+import { DecoderPanel } from './DecoderPanel.js';
+
 const noop = vi.fn();
 
 describe('DecoderPanel', () => {
   beforeEach(() => {
-    mockDecodeAudio.mockResolvedValue(GOOD_RESULT);
+    workerState.nextResult = GOOD_RESULT;
+    workerState.messageHandler = null;
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue({
@@ -75,7 +102,7 @@ describe('DecoderPanel', () => {
     });
   });
 
-  it('calls onResult with decoded data after triggerUrl resolves', async () => {
+  it('calls onResult with a PNG data URL after triggerUrl resolves', async () => {
     const onResult = vi.fn();
     render(
       <DecoderPanel
@@ -87,7 +114,9 @@ describe('DecoderPanel', () => {
     );
 
     await waitFor(() => {
-      expect(onResult).toHaveBeenCalledWith(expect.objectContaining({ url: GOOD_RESULT.imageUrl }));
+      expect(onResult).toHaveBeenCalledWith(
+        expect.objectContaining({ url: expect.stringMatching(/^data:image\/png;base64,/) })
+      );
     });
   });
 
@@ -126,9 +155,25 @@ describe('DecoderPanel', () => {
     });
   });
 
+  it('calls onError when worker returns an error message', async () => {
+    workerState.nextResult = { type: 'error', message: 'Worker decode error' };
+    const onError = vi.fn();
+    render(
+      <DecoderPanel
+        triggerUrl="examples/iss-test.wav"
+        onResult={noop}
+        onError={onError}
+        onReset={noop}
+      />
+    );
+
+    await waitFor(() => {
+      expect(onError).toHaveBeenCalledWith('Worker decode error');
+    });
+  });
+
   it('does not auto-decode when triggerUrl is null', () => {
     render(<DecoderPanel triggerUrl={null} onResult={noop} onError={noop} onReset={noop} />);
-    expect(mockDecodeAudio).not.toHaveBeenCalled();
     expect(fetch).not.toHaveBeenCalled();
   });
 });
