@@ -1,7 +1,7 @@
 {
   "name": "sstv-toolkit",
   "private": true,
-  "version": "1.2.21",
+  "version": "1.2.22",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -36,6 +36,7 @@
     "@tailwindcss/vite": "^4.1.18",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/node": "^25.2.3",
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",

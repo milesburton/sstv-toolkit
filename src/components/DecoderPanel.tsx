@@ -22,28 +22,31 @@ export function DecoderPanel({ triggerUrl, onTriggerConsumed }: Props) {
   const [error, setError] = useState<string | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
-  const decodeUrl = useCallback(async (url: string) => {
-    setProcessing(true);
-    setError(null);
-    setResult(null);
-    try {
-      const response = await fetch(url);
-      const blob = await response.blob();
-      const file = new File([blob], url.split('/').pop() ?? 'audio', { type: blob.type });
-      const decoder = new SSTVDecoder();
-      const decoded = await decoder.decodeAudio(file);
-      setResult({
-        url: decoded.imageUrl,
-        filename: `sstv_decoded_${Date.now()}.png`,
-        diagnostics: decoded.diagnostics,
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Decoding failed');
-    } finally {
-      setProcessing(false);
-      onTriggerConsumed?.();
-    }
-  }, [onTriggerConsumed]);
+  const decodeUrl = useCallback(
+    async (url: string) => {
+      setProcessing(true);
+      setError(null);
+      setResult(null);
+      try {
+        const response = await fetch(url);
+        const blob = await response.blob();
+        const file = new File([blob], url.split('/').pop() ?? 'audio', { type: blob.type });
+        const decoder = new SSTVDecoder();
+        const decoded = await decoder.decodeAudio(file);
+        setResult({
+          url: decoded.imageUrl,
+          filename: `sstv_decoded_${Date.now()}.png`,
+          diagnostics: decoded.diagnostics,
+        });
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Decoding failed');
+      } finally {
+        setProcessing(false);
+        onTriggerConsumed?.();
+      }
+    },
+    [onTriggerConsumed]
+  );
 
   useEffect(() => {
     if (!triggerUrl) return;
