@@ -47,14 +47,9 @@ export class SSTVDecoder {
       const freq = this.detectFrequency(samples, i, 0.01);
 
       if (Math.abs(freq - 1200) < 150) {
-        // Found a 1200Hz-like tone. Use its measured frequency as the reference for the
-        // break boundary scan (handles transmitter frequency offsets up to ±150Hz).
         const breakFreq = freq;
         const checkStep = Math.floor(0.005 * this.sampleRate);
 
-        // Leader check: two sample points (at 200ms and 100ms before) must both
-        // look like 1900Hz. Two independent measurements reduce accidental noise
-        // matches substantially compared to a single check, at modest extra cost.
         if (i < Math.floor(0.25 * this.sampleRate)) continue;
         {
           const expectedLeader = 1900 + (breakFreq - 1200);
@@ -71,8 +66,6 @@ export class SSTVDecoder {
           if (Math.abs(f1 - expectedLeader) > 200 || Math.abs(f2 - expectedLeader) > 200) continue;
         }
 
-        // Scan backward to find the actual break start (handles mid-break entry).
-        // ISS signals can have very long breaks (180ms+) so scan up to 300ms back.
         let breakStart = i;
         const maxBreakSamples = Math.floor(0.3 * this.sampleRate);
         while (breakStart > 0 && i - breakStart < maxBreakSamples) {
@@ -93,9 +86,6 @@ export class SSTVDecoder {
         const breakDuration = (breakEnd - breakStart) / this.sampleRate;
         if (breakDuration < 0.005) continue;
 
-        // After the break, expect either a 30ms 1900Hz start bit or immediate VIS data bits.
-        // Check what follows — if it's 1900Hz (or offset-shifted equivalent), treat it as
-        // the start bit and advance.
         const freqShift = breakFreq - 1200;
         let dataBitPos = breakEnd;
         const afterBreakFreq = this.detectFrequency(samples, dataBitPos, 0.03);
@@ -103,28 +93,21 @@ export class SSTVDecoder {
           dataBitPos += Math.floor(0.03 * this.sampleRate);
         }
 
-        // Validate: the next 30ms must look like a VIS data bit (1100 or 1300Hz + freqShift).
         const firstBitFreq = this.detectFrequency(samples, dataBitPos, 0.03);
         if (Math.abs(firstBitFreq - (1900 + freqShift)) < 150) continue;
         if (firstBitFreq < 1000 + freqShift || firstBitFreq > 1500 + freqShift) continue;
 
         const visCode = this.decodeVIS(samples, dataBitPos, freqShift);
-        // Reject if parity check fails — a strong indicator of a false VIS detection.
         if (!this.lastVisParityOk) continue;
         this.lastVisCode = visCode;
         this.visFreqShift = freqShift;
 
-        // 7 data bits + 1 parity + 1 stop = 9 bits × 30ms each
         let visEndPos = dataBitPos + 9 * Math.floor(0.03 * this.sampleRate);
 
-        // Refine: scan near visEndPos to find where the stop bit actually ends
-        // (the first image sync also starts with 1200Hz so they merge; look for the
-        // porch transition to 1500Hz which marks the true end of the sync).
-        // Search for porch (1500Hz) within ±60ms of visEndPos to get an accurate visEndPos.
         {
-          const porchFreq = FREQ_BLACK + freqShift; // 1500Hz + offset
-          const searchStep = Math.floor(0.002 * this.sampleRate); // 2ms steps
-          const searchWindow = Math.floor(0.06 * this.sampleRate); // ±60ms
+          const porchFreq = FREQ_BLACK + freqShift;
+          const searchStep = Math.floor(0.002 * this.sampleRate);
+          const searchWindow = Math.floor(0.06 * this.sampleRate);
           let porchFound = -1;
           for (
             let p = Math.max(0, visEndPos - searchWindow);
@@ -138,9 +121,6 @@ export class SSTVDecoder {
             }
           }
           if (porchFound !== -1) {
-            // Porch is at porchFound; sync precedes it by syncPulse duration.
-            // visEndPos = sync start (= porchFound - syncPulse_samples).
-            // But we don't know syncPulse yet (mode not returned yet); use 9ms default.
             const syncSamples = Math.floor(0.009 * this.sampleRate);
             visEndPos = Math.max(visEndPos - searchWindow, porchFound - syncSamples);
           }
@@ -152,12 +132,9 @@ export class SSTVDecoder {
             return mode;
           }
         }
-        // VIS code decoded but doesn't match any known mode — skip without setting visEndPos.
       }
     }
 
-    // No VIS matched. Attempt timing-based mode detection by measuring the
-    // period between consecutive sync pulses in the first few seconds.
     const timingMode = this.detectModeByTiming(samples);
     if (timingMode) return timingMode;
 
@@ -166,12 +143,9 @@ export class SSTVDecoder {
   }
 
   detectModeByTiming(samples) {
-    // Find a sustained 1900Hz leader (at least 200ms), then scan forward from
-    // its end for repeating 1200Hz sync pulses and measure the period.
-    // This avoids false matches from noise-generated 1200Hz candidates.
     const scanLimit = Math.min(samples.length, this.sampleRate * 60);
-    const chunkSamples = Math.floor(0.05 * this.sampleRate); // 50ms chunks
-    const minLeaderChunks = 4; // need 200ms of sustained 1900Hz
+    const chunkSamples = Math.floor(0.05 * this.sampleRate);
+    const minLeaderChunks = 4;
 
     let leaderEnd = -1;
     let runCount = 0;
@@ -187,8 +161,6 @@ export class SSTVDecoder {
     }
     if (leaderEnd === -1) return null;
 
-    // Skip the VIS section (break + bits + porch ≈ 500ms) then scan for
-    // repeating 1200Hz image sync pulses within the next 3s.
     const visSkip = Math.floor(0.5 * this.sampleRate);
     const step = Math.floor(this.sampleRate * 0.002);
     const searchStart = leaderEnd + visSkip;
@@ -210,7 +182,6 @@ export class SSTVDecoder {
 
     const period = (syncs[syncs.length - 1] - syncs[0]) / ((syncs.length - 1) * this.sampleRate);
 
-    // Match measured period to known modes within 10% tolerance.
     for (const [, mode] of Object.entries(SSTV_MODES)) {
       const expected =
         mode.colorFormat === 'PD'
@@ -239,8 +210,6 @@ export class SSTVDecoder {
       idx += Math.floor(0.03 * this.sampleRate);
     }
 
-    // Check parity bit (bit 7): even parity over the 7 data bits.
-    // A mismatched parity strongly indicates a false VIS detection.
     const parityFreq = this.detectFrequency(samples, idx, 0.03);
     const parityBit = parityFreq < 1200 + freqShift ? 1 : 0;
     this.lastVisParityOk = ones % 2 === parityBit;
@@ -272,20 +241,14 @@ export class SSTVDecoder {
     }
 
     const visEnd = this.visEndPos || Math.floor(0.61 * this.sampleRate);
-    // Search for the first image sync pulse within one line-duration forward of visEnd.
-    // We search FORWARD only to avoid false positives from VIS tones (stop bit, data bits)
-    // which all precede visEnd and can look like 1200Hz sync pulses.
     const lineSamplesInit = Math.floor((this.mode.scanTime || 0.15) * this.sampleRate);
     let position = this.findSyncPulse(samples, visEnd, visEnd + lineSamplesInit);
 
     if (position === -1) {
-      // visEndPos may be slightly past the real sync start (Goertzel window straddling boundary).
-      // Try a broader forward search with a generous window.
       position = this.findSyncPulse(samples, visEnd, visEnd + lineSamplesInit * 3);
     }
 
     if (position === -1) {
-      // Last resort: scan from the beginning of the audio
       position = this.findSyncPulse(samples, 0);
     }
 
@@ -294,8 +257,6 @@ export class SSTVDecoder {
     }
 
     if (this.autoCalibrate) {
-      // Seed with the rough offset detected from the VIS break frequency,
-      // then refine using sync pulses from the actual image data.
       this.freqOffset = this.visFreqShift || 0;
       const refined = this.estimateFreqOffset(samples, position);
       if (refined !== 0) this.freqOffset = refined;

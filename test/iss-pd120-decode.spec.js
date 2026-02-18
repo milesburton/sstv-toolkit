@@ -104,12 +104,11 @@ describe('ISS PD120 Decode Test', () => {
     console.log(`   Average RGB: R=${avgR.toFixed(1)}, G=${avgG.toFixed(1)}, B=${avgB.toFixed(1)}`);
     console.log(`   Color imbalance: ${colorImbalance.toFixed(1)} (should be <100)`);
 
-    // Save for inspection
     const fs = await import('node:fs');
-    fs.writeFileSync('test-output-iss-pd120.png', imgBuffer);
-    console.log('   Saved to: test-output-iss-pd120.png\n');
+    fs.mkdirSync('test/output', { recursive: true });
+    fs.writeFileSync('test/output/iss-pd120-decode.png', imgBuffer);
+    console.log('   Saved to: test/output/iss-pd120-decode.png\n');
 
-    // The image should not be entirely one colour (green/magenta corruption)
     expect(colorImbalance).toBeLessThan(100);
   }, 60000);
 });

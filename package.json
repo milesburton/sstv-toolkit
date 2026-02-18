@@ -1,7 +1,7 @@
 {
   "name": "sstv-toolkit",
   "private": true,
-  "version": "1.2.17",
+  "version": "1.2.18",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -11,11 +11,10 @@
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:run": "vitest run",
-    "spec": "vitest",
-    "spec:run": "vitest run",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "test:all": "npm run spec:run && npm run test:e2e",
+    "test:all": "npm run test:run && npm run test:e2e",
+    "generate-examples": "node generate-examples.js",
     "biome:check": "biome check --write .",
     "biome:lint": "biome lint .",
     "biome:format": "biome format --write .",

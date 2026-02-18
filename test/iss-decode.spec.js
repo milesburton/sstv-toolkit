@@ -7,7 +7,6 @@ import { readFileSync } from 'node:fs';
 import { createCanvas, Image } from 'canvas';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-// Mock AudioContext for Node.js
 class MockAudioContext {
   constructor() {
     this.sampleRate = 48000;
@@ -53,7 +52,6 @@ beforeAll(async () => {
 
 describe('ISS SSTV Decode Test', () => {
   it('should decode ISS SSTV transmission without excessive green tint', async () => {
-    // Load the ISS SSTV file
     const wavBuffer = readFileSync('test/fixtures/pd120_iss_2020.wav');
     const blob = {
       arrayBuffer: () =>
@@ -62,7 +60,6 @@ describe('ISS SSTV Decode Test', () => {
         ),
     };
 
-    // Decode
     const decoder = new SSTVDecoder(48000);
     const decoded = await decoder.decodeAudio(blob);
     const result = typeof decoded === 'string' ? decoded : decoded.imageUrl;
@@ -70,7 +67,6 @@ describe('ISS SSTV Decode Test', () => {
     expect(result).toBeDefined();
     expect(result).toMatch(/^data:image\/png;base64,/);
 
-    // Analyze the decoded image
     const base64Data = result.replace(/^data:image\/png;base64,/, '');
     const imgBuffer = Buffer.from(base64Data, 'base64');
 
@@ -87,7 +83,6 @@ describe('ISS SSTV Decode Test', () => {
     const imageData = ctx.getImageData(0, 0, img.width, img.height);
     const pixels = imageData.data;
 
-    // Calculate average color statistics and detect color corruption
     let avgR = 0,
       avgG = 0,
       avgB = 0;
@@ -104,18 +99,15 @@ describe('ISS SSTV Decode Test', () => {
       avgG += g;
       avgB += b;
 
-      // Green dominant: G significantly higher than R and B
-      // Use threshold of 40 to account for noise in real ISS signals
+      // threshold of 40 to account for noise in real ISS signals
       if (g > r + 40 && g > b + 40) {
         greenDominant++;
       }
 
-      // Magenta dominant: R and B high, G low
       if (r > 150 && b > 150 && g < 100) {
         magentaDominant++;
       }
 
-      // Normal: balanced RGB or reasonable colors
       const maxDiff = Math.max(Math.abs(r - g), Math.abs(g - b), Math.abs(r - b));
       if (maxDiff < 80) {
         normalPixels++;
@@ -137,24 +129,17 @@ describe('ISS SSTV Decode Test', () => {
     console.log(`   Magenta-dominant: ${magentaPercent.toFixed(1)}%`);
     console.log(`   Normal-colored: ${normalPercent.toFixed(1)}%`);
 
-    // Save decoded image for inspection
     const fs = await import('node:fs');
-    fs.writeFileSync('test-output-iss.png', imgBuffer);
-    console.log(`   Saved to: test-output-iss.png\n`);
+    fs.mkdirSync('test/output', { recursive: true });
+    fs.writeFileSync('test/output/iss-decode.png', imgBuffer);
+    console.log(`   Saved to: test/output/iss-decode.png\n`);
 
-    // CRITICAL TESTS
-    // Image should NOT be dominated by green or magenta (chroma corruption)
-    // ISS signals are inherently noisy, so we allow slightly higher thresholds
-    expect(greenPercent).toBeLessThan(55); // FM demod handles ISS signals better
+    expect(greenPercent).toBeLessThan(55);
     expect(magentaPercent).toBeLessThan(40);
 
-    // Average green shouldn't be way higher than red/blue (THIS IS THE KEY TEST)
     const colorImbalance = Math.abs(avgG - avgR) + Math.abs(avgG - avgB);
-    // FM demodulation handles ISS signals better but some green tint may remain
-    // due to frequency drift and signal quality - this is a significant improvement
-    expect(colorImbalance).toBeLessThan(100); // Was 30, increased for FM demod with ISS signals
+    expect(colorImbalance).toBeLessThan(100);
 
-    // Should have reasonable amount of normal pixels
-    expect(normalPercent).toBeGreaterThan(15); // Relaxed for noisy ISS signal
-  }, 120000); // PD120 decoding is slower than Robot36 — allow 2 minutes
+    expect(normalPercent).toBeGreaterThan(15);
+  }, 120000);
 });

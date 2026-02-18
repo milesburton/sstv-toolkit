@@ -21,7 +21,6 @@ describe('SSTVDecoder', () => {
       const duration = 0.1;
       const numSamples = Math.floor(duration * sampleRate);
 
-      // Generate a pure sine wave
       const samples = new Float32Array(numSamples);
       for (let i = 0; i < numSamples; i++) {
         const t = i / sampleRate;
@@ -31,7 +30,6 @@ describe('SSTVDecoder', () => {
       decoder.sampleRate = sampleRate;
       const magnitude = decoder.goertzel(samples, 0, numSamples, frequency);
 
-      // Should have high magnitude for the correct frequency
       expect(magnitude).toBeGreaterThan(0.4);
     });
 
@@ -42,7 +40,6 @@ describe('SSTVDecoder', () => {
       const duration = 0.1;
       const numSamples = Math.floor(duration * sampleRate);
 
-      // Generate a sine wave at signalFreq
       const samples = new Float32Array(numSamples);
       for (let i = 0; i < numSamples; i++) {
         const t = i / sampleRate;
@@ -52,7 +49,6 @@ describe('SSTVDecoder', () => {
       decoder.sampleRate = sampleRate;
       const magnitude = decoder.goertzel(samples, 0, numSamples, testFreq);
 
-      // Should have low magnitude for incorrect frequency
       expect(magnitude).toBeLessThan(0.3);
     });
   });
@@ -73,7 +69,6 @@ describe('SSTVDecoder', () => {
       decoder.sampleRate = sampleRate;
       const detectedFreq = decoder.detectFrequency(samples, 0, duration);
 
-      // Should be close to 1200 Hz
       expect(Math.abs(detectedFreq - 1200)).toBeLessThan(100);
     });
 
@@ -92,7 +87,7 @@ describe('SSTVDecoder', () => {
       decoder.sampleRate = sampleRate;
       const detectedFreq = decoder.detectFrequencyRange(samples, 0, duration);
 
-      // Should be close to 1500 Hz (within 60 Hz for reasonable Goertzel accuracy)
+      // within 60 Hz for reasonable Goertzel accuracy
       expect(Math.abs(detectedFreq - 1500)).toBeLessThanOrEqual(60);
     });
 
@@ -111,7 +106,7 @@ describe('SSTVDecoder', () => {
       decoder.sampleRate = sampleRate;
       const detectedFreq = decoder.detectFrequencyRange(samples, 0, duration);
 
-      // Should be close to 2300 Hz (within 60 Hz for reasonable Goertzel accuracy)
+      // within 60 Hz for reasonable Goertzel accuracy
       expect(Math.abs(detectedFreq - 2300)).toBeLessThanOrEqual(60);
     });
 
@@ -132,7 +127,7 @@ describe('SSTVDecoder', () => {
         decoder.sampleRate = sampleRate;
         const detectedFreq = decoder.detectFrequencyRange(samples, 0, duration);
 
-        // Should be within 60 Hz (reasonable for Goertzel with 441 samples)
+        // within 60 Hz (reasonable for Goertzel with 441 samples)
         expect(Math.abs(detectedFreq - frequency)).toBeLessThanOrEqual(60);
       });
     });
@@ -140,21 +135,17 @@ describe('SSTVDecoder', () => {
 
   describe('Mode Detection', () => {
     it('should decode VIS code correctly', () => {
-      // Generate a simple VIS code pattern
       const sampleRate = 44100;
-      const samples = new Float32Array(sampleRate * 0.5); // 500ms buffer
+      const samples = new Float32Array(sampleRate * 0.5);
 
-      // For now, just test that detectMode doesn't crash
       decoder.sampleRate = sampleRate;
 
-      // Fill with noise
       for (let i = 0; i < samples.length; i++) {
         samples[i] = Math.random() * 0.1 - 0.05;
       }
 
       const mode = decoder.detectMode(samples);
 
-      // Should return a valid mode (or Robot 36 as default)
       expect(mode).toBeDefined();
       expect(mode.name).toBeTruthy();
     });

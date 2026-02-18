@@ -28,12 +28,11 @@ playwright-report/
 test-results/
 
 # Test outputs
-test-output-*.png
+test/output/
 decoded-*.png
 check-samplerate.html
 debug-test.html
 debug-encode-decode.html
 
 # Generated audio/assets
-public/test-colorbars.wav
 *.backup

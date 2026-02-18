@@ -1,28 +1,7 @@
-/**
- * VIS Detection Robustness Tests
- *
- * Tests three real-world failure scenarios discovered in 2026-02:
- *
- * Scenario 1: VIS header starts late (10–60s into the recording)
- *   Real recordings often have voice or noise before the SSTV transmission.
- *   The old decoder only searched the first 2 seconds.
- *
- * Scenario 2: False 1200Hz glitch inside the leader
- *   The ISS transmitter inserts a brief (~8ms) 1200Hz artifact in the middle
- *   of the 600ms 1900Hz leader. The old decoder detected this as the VIS break
- *   and read 1900Hz leader tones as data bits → VIS code 0x00.
- *
- * Scenario 3: Frequency offset (real transmitters are not perfectly tuned)
- *   ISS signals have ~-129Hz offset. The old decoder used a fixed frequency
- *   mapping and produced severe color corruption.
- */
-
 import { createCanvas } from 'canvas';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 const SAMPLE_RATE = 48000;
-
-// --- WAV builder helpers ---
 
 function addTone(samples, frequency, duration, phase = { value: 0 }) {
   const numSamples = Math.floor(duration * SAMPLE_RATE);
@@ -70,16 +49,6 @@ function samplesToWavBlob(samples) {
   return new Blob([buffer], { type: 'audio/wav' });
 }
 
-/**
- * Build a complete Robot36 SSTV signal as raw samples.
- * Returns the samples array (without WAV header).
- * @param {object} opts
- * @param {number} [opts.freqOffset=0]     - Hz to add to all frequencies
- * @param {number} [opts.leaderDuration=0.3] - seconds of 1900Hz leader
- * @param {boolean} [opts.falseGlitch=false] - insert 8ms 1200Hz glitch in leader
- * @param {number} [opts.breakDuration=0.01] - seconds of 1200Hz VIS break
- * @param {boolean} [opts.omitStartBit=false] - skip the 30ms 1900Hz start bit
- */
 function buildRobot36Signal(imageData, opts = {}) {
   const {
     freqOffset = 0,
@@ -93,26 +62,20 @@ function buildRobot36Signal(imageData, opts = {}) {
   const phase = { value: 0 };
   const samples = [];
 
-  // VIS header
   if (falseGlitch) {
-    // Two leader segments separated by a short 1200Hz glitch, like the ISS transmitter
     addTone(samples, 1900 + o, leaderDuration / 2, phase);
-    addTone(samples, 1200 + o, 0.008, phase); // false 8ms glitch
+    addTone(samples, 1200 + o, 0.008, phase);
     addTone(samples, 1900 + o, leaderDuration / 2, phase);
   } else {
     addTone(samples, 1900 + o, leaderDuration, phase);
   }
 
-  // VIS break (spec: 10ms, real ISS: ~27ms)
   addTone(samples, 1200 + o, breakDuration, phase);
 
-  // Optional start bit (spec: 30ms 1900Hz)
   if (!omitStartBit) {
     addTone(samples, 1900 + o, 0.03, phase);
   }
 
-  // VIS data bits for Robot36 (visCode = 0x08 = 0001000)
-  // bit0=0, bit1=0, bit2=0, bit3=1, bit4=0, bit5=0, bit6=0
   const visCode = 0x08;
   let parity = 0;
   for (let i = 0; i < 7; i++) {
@@ -120,22 +83,17 @@ function buildRobot36Signal(imageData, opts = {}) {
     parity ^= bit;
     addTone(samples, (bit ? 1100 : 1300) + o, 0.03, phase);
   }
-  // parity bit
   addTone(samples, (parity ? 1100 : 1300) + o, 0.03, phase);
-  // stop bit
   addTone(samples, 1200 + o, 0.03, phase);
 
-  // Image scan lines
   const { data, width, height } = imageData;
   const yScanSamples = Math.floor(0.088 * SAMPLE_RATE);
   const chromaScanSamples = Math.floor(0.044 * SAMPLE_RATE);
 
   for (let y = 0; y < height; y++) {
-    // sync + porch
     addTone(samples, 1200 + o, 0.009, phase);
     addTone(samples, 1500 + o, 0.003, phase);
 
-    // Y scan (exact position approach)
     for (let x = 0; x < width; x++) {
       const startSample = Math.floor((x / width) * yScanSamples);
       const endSample = Math.floor(((x + 1) / width) * yScanSamples);
@@ -145,12 +103,10 @@ function buildRobot36Signal(imageData, opts = {}) {
       addTone(samples, freq, (endSample - startSample) / SAMPLE_RATE, phase);
     }
 
-    // separator + porch
     const isEvenLine = y % 2 === 0;
     addTone(samples, (isEvenLine ? 1500 : 2300) + o, 0.0045, phase);
     addTone(samples, 1500 + o, 0.0015, phase);
 
-    // chroma scan at half resolution
     const halfWidth = Math.floor(width / 2);
     for (let x = 0; x < halfWidth; x++) {
       const startSample = Math.floor((x / halfWidth) * chromaScanSamples);
@@ -162,9 +118,9 @@ function buildRobot36Signal(imageData, opts = {}) {
       const Yv = 0.299 * r + 0.587 * g + 0.114 * b;
       let chromaVal;
       if (isEvenLine) {
-        chromaVal = 128 + 0.701 * (r - Yv); // V (Cr)
+        chromaVal = 128 + 0.701 * (r - Yv);
       } else {
-        chromaVal = 128 + 0.886 * (b - Yv); // U (Cb)
+        chromaVal = 128 + 0.886 * (b - Yv);
       }
       const freq = 1500 + (Math.max(0, Math.min(255, Math.round(chromaVal))) / 255) * 800 + o;
       addTone(samples, freq, (endSample - startSample) / SAMPLE_RATE, phase);
@@ -174,17 +130,10 @@ function buildRobot36Signal(imageData, opts = {}) {
   return samples;
 }
 
-/**
- * Wrap raw samples with silence prefix and return a WAV Blob.
- * @param {number[]} signalSamples - the SSTV signal
- * @param {number} prefixSeconds   - seconds of silence before the signal
- */
 function wrapWithSilence(signalSamples, prefixSeconds) {
   const silenceSamples = new Array(Math.floor(prefixSeconds * SAMPLE_RATE)).fill(0);
   return samplesToWavBlob([...silenceSamples, ...signalSamples]);
 }
-
-// --- Test harness setup ---
 
 let SSTVDecoder;
 
@@ -226,7 +175,6 @@ beforeAll(async () => {
 function makeTestImage() {
   const canvas = createCanvas(320, 240);
   const ctx = canvas.getContext('2d');
-  // Four distinct color blocks for easy validation
   ctx.fillStyle = 'rgb(255, 0, 0)';
   ctx.fillRect(0, 0, 160, 120);
   ctx.fillStyle = 'rgb(0,   0, 255)';
@@ -244,7 +192,6 @@ async function decodeBlob(blob) {
   const imageUrl = typeof result === 'string' ? result : result.imageUrl;
   const diagnostics = typeof result === 'object' ? result.diagnostics : null;
 
-  // Render to canvas and sample pixel blocks
   const { createCanvas: cc, Image } = await import('canvas');
   const img = new Image();
   await new Promise((resolve, reject) => {
@@ -257,7 +204,6 @@ async function decodeBlob(blob) {
   ctx.drawImage(img, 0, 0);
   const px = ctx.getImageData(0, 0, img.width, img.height).data;
 
-  // Sample centre of each quadrant
   const sample = (x, y) => {
     const i = (y * img.width + x) * 4;
     return { r: px[i], g: px[i + 1], b: px[i + 2] };
@@ -265,14 +211,12 @@ async function decodeBlob(blob) {
 
   return {
     diagnostics,
-    topLeft: sample(80, 60), // red
-    topRight: sample(240, 60), // blue
-    bottomLeft: sample(80, 180), // green
-    bottomRight: sample(240, 180), // white
+    topLeft: sample(80, 60),
+    topRight: sample(240, 60),
+    bottomLeft: sample(80, 180),
+    bottomRight: sample(240, 180),
   };
 }
-
-// --- Tests ---
 
 describe('VIS Detection Robustness', () => {
   describe('Scenario 1: VIS header starts late in the recording', () => {

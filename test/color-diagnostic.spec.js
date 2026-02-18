@@ -1,11 +1,6 @@
-/**
- * Diagnostic test to identify the root cause of color conversion issues
- */
-
 import { beforeAll, describe, expect, it } from 'vitest';
 
 beforeAll(async () => {
-  // Mock browser APIs
   global.AudioContext = class {
     constructor() {
       this.sampleRate = 48000;
@@ -15,16 +10,13 @@ beforeAll(async () => {
   if (!global.URL) {
     global.URL = {
       createObjectURL: () => 'mock://image',
-      revokeObjectURL: () => {
-        // Intentionally empty - mock implementation
-      },
+      revokeObjectURL: () => undefined,
     };
   }
 });
 
 describe('Color Conversion Diagnostic', () => {
   it('should verify encoder YUV formulas match decoder expectations', () => {
-    // Test pure colors with known YUV values
     const testCases = [
       { r: 255, g: 0, b: 0, name: 'Pure Red' },
       { r: 0, g: 255, b: 0, name: 'Pure Green' },
@@ -33,12 +25,10 @@ describe('Color Conversion Diagnostic', () => {
     ];
 
     testCases.forEach(({ r, g, b, name }) => {
-      // Encoder formula (BT.601)
       const Y_enc = 0.299 * r + 0.587 * g + 0.114 * b;
       const U_enc = 128 + (b - Y_enc) * 0.5;
       const V_enc = 128 + (r - Y_enc) * 0.5;
 
-      // Decoder formula (BT.601 inverse)
       const R_dec = Y_enc + (V_enc - 128) * 2;
       const G_dec =
         Y_enc - (0.114 / 0.587) * (U_enc - 128) * 2 - (0.299 / 0.587) * (V_enc - 128) * 2;
@@ -51,7 +41,6 @@ describe('Color Conversion Diagnostic', () => {
         `  Error: ΔR=${(R_dec - r).toFixed(1)}, ΔG=${(G_dec - g).toFixed(1)}, ΔB=${(B_dec - b).toFixed(1)}`
       );
 
-      // Verify conversion is approximately correct (allowing for YUV rounding)
       expect(Math.abs(R_dec - r)).toBeLessThan(5);
       expect(Math.abs(G_dec - g)).toBeLessThan(5);
       expect(Math.abs(B_dec - b)).toBeLessThan(5);
@@ -59,17 +48,12 @@ describe('Color Conversion Diagnostic', () => {
   });
 
   it('should verify BT.601 formulas are mathematically consistent', () => {
-    // Standard BT.601 coefficients
     const Kr = 0.299;
     const Kg = 0.587;
     const Kb = 0.114;
 
-    // Derived U/V coefficients
     const Umax = 0.5;
     const Vmax = 0.5;
-
-    // U = (B - Y) / (1 - Kb) * Umax
-    // V = (R - Y) / (1 - Kr) * Vmax
 
     const U_coeff_r = (-Kr / (1 - Kb)) * Umax;
     const U_coeff_g = (-Kg / (1 - Kb)) * Umax;
@@ -91,7 +75,6 @@ describe('Color Conversion Diagnostic', () => {
     console.log(`  U: -0.168736 * R + -0.331264 * G + 0.5 * B`);
     console.log(`  V: 0.5 * R + -0.418688 * G + -0.081312 * B`);
 
-    // Check if coefficients match
     expect(Math.abs(U_coeff_r - -0.168736)).toBeLessThan(0.001);
     expect(Math.abs(U_coeff_g - -0.331264)).toBeLessThan(0.001);
     expect(Math.abs(U_coeff_b - 0.5)).toBeLessThan(0.001);

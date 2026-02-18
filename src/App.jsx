@@ -485,32 +485,6 @@ function App() {
           )}
         </div>
       </main>
-
-      <div className="info-section">
-        <h3>ℹ️ About SSTV</h3>
-        <ul>
-          <li>
-            <strong>Encode:</strong> Convert images to audio signals for radio transmission
-          </li>
-          <li>
-            <strong>Decode:</strong> Extract images from SSTV audio (automatic mode detection via
-            VIS code)
-          </li>
-          <li>
-            <strong>Modes:</strong> Robot 36 (fast, 36s), Martin M1 (high quality, 114s), Scottie S1
-            (balanced, 110s)
-          </li>
-          <li>
-            <strong>Privacy:</strong> All processing happens in your browser - no data sent to
-            servers
-          </li>
-          <li>
-            <strong>Use Cases:</strong> Amateur radio, emergency communications, ISS contact,
-            digital archaeology
-          </li>
-        </ul>
-      </div>
-
       <footer>
         <p>
           <a

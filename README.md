@@ -8,9 +8,10 @@ Web-based SSTV encoder/decoder. Converts images to SSTV audio and decodes SSTV t
 
 - Encode images to SSTV audio (WAV)
 - Decode SSTV audio to images (PNG)
-- Supports Robot 36, Martin M1, Scottie S1
-- Automatic VIS code detection
-- Client-side only - no server required
+- Supports Robot 36, Martin M1, Scottie S1, PD120
+- Automatic VIS code detection with timing-based fallback for non-standard headers (ISS)
+- Frequency offset auto-calibration for Doppler-shifted signals
+- Client-side only — no server required
 
 ## Usage
 
@@ -26,11 +27,12 @@ Web-based SSTV encoder/decoder. Converts images to SSTV audio and decodes SSTV t
 
 ## SSTV Modes
 
-| Mode | Resolution | Time | Color |
-|------|-----------|------|-------|
-| Robot 36 | 320x240 | 36s | YUV |
-| Martin M1 | 320x256 | 114s | RGB |
-| Scottie S1 | 320x256 | 110s | RGB |
+| Mode | Resolution | Scan time | Colour |
+|------|-----------|-----------|--------|
+| Robot 36 | 320×240 | 36s | YUV |
+| Martin M1 | 320×256 | 114s | RGB |
+| Scottie S1 | 320×256 | 110s | RGB |
+| PD120 | 640×496 | 122s | YUV |
 
 ## Development
 
