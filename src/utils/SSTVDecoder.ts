@@ -565,13 +565,14 @@ export class SSTVDecoder {
       let freq = frequencies[x] ?? 0;
 
       if (x >= 2 && x < halfWidth - 2) {
-        freq = [
-          frequencies[x - 2] ?? 0,
-          frequencies[x - 1] ?? 0,
-          frequencies[x] ?? 0,
-          frequencies[x + 1] ?? 0,
-          frequencies[x + 2] ?? 0,
-        ].sort((a, b) => a - b)[2] ?? 0;
+        freq =
+          [
+            frequencies[x - 2] ?? 0,
+            frequencies[x - 1] ?? 0,
+            frequencies[x] ?? 0,
+            frequencies[x + 1] ?? 0,
+            frequencies[x + 2] ?? 0,
+          ].sort((a, b) => a - b)[2] ?? 0;
       }
 
       const freqBlack = this.freqOffset ? FREQ_BLACK + this.freqOffset : FREQ_BLACK;

@@ -108,6 +108,14 @@ export default function App() {
     a.click();
   };
 
+  const downloadEnhanced = () => {
+    if (!decodeResult?.enhancedUrl) return;
+    const a = document.createElement('a');
+    a.href = decodeResult.enhancedUrl;
+    a.download = `enhanced_${decodeResult.filename}`;
+    a.click();
+  };
+
   const resetEncode = useCallback(() => {
     setEncodeResult(null);
     setEncodeError(null);
@@ -237,18 +245,53 @@ export default function App() {
                     </span>
                     <QualityBadge verdict={verdict} />
                   </h3>
-                  <img
-                    src={decodeResult.url}
-                    alt="Decoded SSTV"
-                    className="max-w-full h-auto rounded-lg block mx-auto mb-4 opacity-95"
-                  />
+
+                  {decodeResult.enhancedUrl ? (
+                    <div className="grid grid-cols-2 gap-4 mb-4">
+                      <div>
+                        <p className="text-white/50 text-xs uppercase tracking-wider text-center mb-2">
+                          Original
+                        </p>
+                        <img
+                          src={decodeResult.url}
+                          alt="Original SSTV"
+                          className="max-w-full h-auto rounded-lg block mx-auto opacity-95"
+                        />
+                      </div>
+                      <div>
+                        <p className="text-white/50 text-xs uppercase tracking-wider text-center mb-2">
+                          AI Enhanced
+                        </p>
+                        <img
+                          src={decodeResult.enhancedUrl}
+                          alt="Enhanced SSTV"
+                          className="max-w-full h-auto rounded-lg block mx-auto shadow-glow"
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <img
+                      src={decodeResult.url}
+                      alt="Decoded SSTV"
+                      className="max-w-full h-auto rounded-lg block mx-auto mb-4 opacity-95"
+                    />
+                  )}
+
                   <div className="flex gap-3 justify-center mb-4">
                     <button
                       onClick={downloadDecode}
                       className="px-5 py-2 text-sm font-semibold bg-emerald-600 text-white rounded-lg hover:bg-emerald-500 hover:-translate-y-0.5 transition-all"
                     >
-                      Download PNG
+                      {decodeResult.enhancedUrl ? 'Download Original' : 'Download PNG'}
                     </button>
+                    {decodeResult.enhancedUrl && (
+                      <button
+                        onClick={downloadEnhanced}
+                        className="px-5 py-2 text-sm font-semibold bg-emerald-600 text-white rounded-lg hover:bg-emerald-500 hover:-translate-y-0.5 transition-all"
+                      >
+                        Download Enhanced
+                      </button>
+                    )}
                     <button
                       onClick={resetDecode}
                       className="px-5 py-2 text-sm font-semibold bg-white/10 text-white/70 rounded-lg hover:bg-white/15 transition-all"

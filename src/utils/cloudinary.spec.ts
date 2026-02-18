@@ -1,10 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  getCloudinaryConfig,
-  getEnhancedUrl,
-  getOriginalUrl,
-  getReportUrl,
-} from './cloudinary.js';
+import { getCloudinaryConfig, getEnhancedUrl, getOriginalUrl, getReportUrl } from './cloudinary.js';
 
 describe('cloudinary', () => {
   beforeEach(() => {
