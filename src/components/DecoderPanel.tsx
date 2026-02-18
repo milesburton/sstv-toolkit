@@ -16,6 +16,22 @@ interface Props {
   onTriggerConsumed?: () => void;
 }
 
+const AudioIcon = () => (
+  <svg
+    width="48"
+    height="48"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.25"
+  >
+    <title>Audio file</title>
+    <path d="M9 18V5l12-2v13" />
+    <circle cx="6" cy="18" r="3" />
+    <circle cx="18" cy="16" r="3" />
+  </svg>
+);
+
 export function DecoderPanel({ triggerUrl, onTriggerConsumed }: Props) {
   const [processing, setProcessing] = useState(false);
   const [result, setResult] = useState<DecodeState | null>(null);
@@ -94,39 +110,45 @@ export function DecoderPanel({ triggerUrl, onTriggerConsumed }: Props) {
 
   return (
     <div ref={panelRef} className="bg-transparent">
-      <div className="text-center mb-6 pb-4 border-b-2 border-gray-200">
-        <h2 className="text-primary text-2xl font-semibold mb-2">📻 Decoder</h2>
-        <p className="text-gray-500 text-sm">SSTV Audio → Image</p>
+      <div className="text-center mb-6 pb-5 border-b border-white/10">
+        <h2 className="text-white text-xl font-semibold mb-1 tracking-wide">Decoder</h2>
+        <p className="text-white/40 text-xs uppercase tracking-widest">SSTV Audio → Image</p>
       </div>
 
-      <div className="mb-6 text-center">
-        <p className="text-primary font-medium text-sm">🔍 Automatic mode detection via VIS code</p>
+      <div className="mb-5 text-center">
+        <p className="text-white/40 text-xs uppercase tracking-wider font-medium">
+          Automatic mode detection via VIS code
+        </p>
       </div>
 
       <DropZone
         accept="audio/*"
         onFile={handleFile}
         processing={processing}
-        icon="🎵"
+        icon={<AudioIcon />}
         hint="WAV, MP3, OGG"
         inputId="decode-input"
       >
         <div className="mt-3 flex flex-col items-center gap-1">
-          <p className="text-xs text-gray-400">Try an example:</p>
-          <a href="examples/iss-test.wav" download className="text-xs text-primary hover:underline">
+          <p className="text-xs text-white/30">Try an example:</p>
+          <a
+            href="examples/iss-test.wav"
+            download
+            className="text-xs text-primary/70 hover:text-primary transition-colors"
+          >
             ISS Robot 36 (.wav)
           </a>
           <a
             href="examples/Space_Comms_PD120_SSTV_Test_Recording.mp3"
             download
-            className="text-xs text-primary hover:underline"
+            className="text-xs text-primary/70 hover:text-primary transition-colors"
           >
             ISS PD120 (.mp3)
           </a>
           <a
             href="examples/test-colorbars.wav"
             download
-            className="text-xs text-primary hover:underline"
+            className="text-xs text-primary/70 hover:text-primary transition-colors"
           >
             Colour bars (.wav)
           </a>
@@ -134,38 +156,36 @@ export function DecoderPanel({ triggerUrl, onTriggerConsumed }: Props) {
       </DropZone>
 
       {error && (
-        <div className="bg-red-50 border-2 border-red-200 rounded-lg p-4 my-4 text-red-600 text-center text-sm">
-          ❌ {error}
+        <div className="border border-red-500/30 bg-red-500/10 rounded-lg p-3 my-4 text-red-400 text-center text-sm">
+          {error}
         </div>
       )}
 
       {result && (
-        <div className="bg-gray-50 rounded-lg p-6 mt-4">
-          <h3 className="mb-4 text-lg font-semibold text-center">
-            {verdict === 'bad'
-              ? '⚠️ Decoded (quality issues)'
-              : verdict === 'warn'
-                ? '⚠️ Decoded Successfully'
-                : '✅ Decoded Successfully'}
+        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-5 mt-4">
+          <h3 className="mb-4 text-sm font-semibold text-center uppercase tracking-wider">
+            <span className={verdict === 'bad' ? 'text-red-400' : 'text-emerald-400'}>
+              {verdict === 'bad' ? 'Decoded (quality issues)' : 'Decoded successfully'}
+            </span>
             <QualityBadge verdict={verdict} />
           </h3>
           <img
             src={result.url}
             alt="Decoded SSTV"
-            className="max-w-full h-auto rounded-lg shadow-sm block mx-auto mb-4"
+            className="max-w-full h-auto rounded-lg block mx-auto mb-4 opacity-95"
           />
           <div className="flex gap-3 justify-center mt-4">
             <button
               onClick={download}
-              className="px-5 py-2 text-sm font-semibold bg-green-500 text-white rounded-md hover:bg-green-600 hover:-translate-y-0.5 transition-all"
+              className="px-5 py-2 text-sm font-semibold bg-emerald-600 text-white rounded-lg hover:bg-emerald-500 hover:-translate-y-0.5 transition-all"
             >
-              💾 Download PNG
+              Download PNG
             </button>
             <button
               onClick={reset}
-              className="px-5 py-2 text-sm font-semibold bg-gray-500 text-white rounded-md hover:bg-gray-600 hover:-translate-y-0.5 transition-all"
+              className="px-5 py-2 text-sm font-semibold bg-white/10 text-white/70 rounded-lg hover:bg-white/15 transition-all"
             >
-              🔄 Decode Another
+              Decode Another
             </button>
           </div>
           {result.diagnostics && <DiagnosticsPanel diagnostics={result.diagnostics} />}

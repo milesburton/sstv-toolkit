@@ -18,33 +18,45 @@ export function GalleryPanel({ onTryDecode }: Props) {
   if (entries.length === 0) return null;
 
   return (
-    <section className="bg-white rounded-xl shadow-card p-8 mb-8">
-      <h3 className="text-primary text-xl font-semibold mb-6">📡 Example Transmissions</h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    <section className="glass rounded-2xl p-8 mb-6">
+      <div className="mb-6">
+        <h3 className="text-white text-lg font-semibold tracking-wide">Example Transmissions</h3>
+        <p className="text-white/40 text-xs uppercase tracking-widest mt-1">
+          Real recordings ready to decode
+        </p>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {entries.map((entry) => (
-          <div key={entry.name} className="border border-gray-200 rounded-xl overflow-hidden">
-            <img src={entry.imageFile} alt={entry.name} className="w-full h-40 object-cover" />
-            <div className="p-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="font-semibold text-sm text-gray-800">{entry.name}</span>
-                <span
-                  className={`text-xs font-bold uppercase px-2 py-0.5 rounded-full quality-${entry.quality}`}
-                >
-                  {entry.mode}
-                </span>
-              </div>
-              <div className="flex gap-2 mt-3">
+          <div
+            key={entry.name}
+            className="rounded-xl border border-white/10 overflow-hidden bg-white/[0.03] flex flex-col"
+          >
+            <div className="relative">
+              <img
+                src={entry.imageFile}
+                alt={entry.name}
+                className="w-full h-44 object-cover block"
+              />
+              <span
+                className={`absolute top-2 right-2 text-xs font-bold uppercase px-2 py-0.5 rounded-full quality-${entry.quality}`}
+              >
+                {entry.mode}
+              </span>
+            </div>
+            <div className="p-4 flex flex-col flex-1">
+              <span className="font-medium text-sm text-white/80 mb-3">{entry.name}</span>
+              <div className="flex gap-2 mt-auto">
                 <a
                   href={entry.audioFile}
                   download
-                  className="flex-1 text-center px-3 py-1.5 text-xs font-semibold bg-primary text-white rounded-md hover:bg-primary-dark transition-colors"
+                  className="flex-1 text-center px-3 py-2 text-xs font-semibold border border-white/20 text-white/60 rounded-lg hover:border-primary hover:text-primary transition-colors"
                 >
-                  ⬇ Download
+                  Download
                 </a>
                 {onTryDecode && (
                   <button
                     onClick={() => onTryDecode(entry.audioFile)}
-                    className="flex-1 px-3 py-1.5 text-xs font-semibold border border-primary text-primary rounded-md hover:bg-primary hover:text-white transition-colors"
+                    className="flex-1 px-3 py-2 text-xs font-semibold bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors"
                   >
                     Try decoding
                   </button>

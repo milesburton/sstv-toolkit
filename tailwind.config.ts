@@ -6,17 +6,14 @@ export default {
     extend: {
       colors: {
         primary: {
-          DEFAULT: '#667eea',
-          dark: '#5568d3',
-          bg: 'rgba(102, 126, 234, 0.05)',
+          DEFAULT: '#7c8cf8',
+          dark: '#6474f0',
+          bg: 'rgba(124, 140, 248, 0.08)',
         },
       },
       boxShadow: {
-        card: '0 10px 40px rgba(0, 0, 0, 0.2)',
-        sm: '0 4px 12px rgba(0, 0, 0, 0.1)',
-      },
-      borderRadius: {
-        card: '12px',
+        card: '0 8px 40px rgba(0, 0, 0, 0.45)',
+        glow: '0 0 20px rgba(124, 140, 248, 0.2)',
       },
     },
   },

@@ -10,7 +10,10 @@ test.describe('Gallery', () => {
     const gallery = page.locator('text=Example Transmissions');
     await expect(gallery).toBeVisible({ timeout: 10000 });
 
-    const cards = page.locator('section').filter({ hasText: 'Example Transmissions' }).locator('img');
+    const cards = page
+      .locator('section')
+      .filter({ hasText: 'Example Transmissions' })
+      .locator('img');
     await expect(cards).toHaveCount(3);
   });
 
@@ -41,7 +44,12 @@ test.describe('Gallery', () => {
     await expect(tryButtons.first()).toBeVisible();
     await tryButtons.first().click();
 
-    await expect(page.locator('text=Decoded Successfully').or(page.locator('text=Decoded (quality issues)')).or(page.locator('text=Decoding…').or(page.locator('🔄')))).toBeVisible({ timeout: 120000 });
+    await expect(
+      page
+        .locator('text=Decoded Successfully')
+        .or(page.locator('text=Decoded (quality issues)'))
+        .or(page.locator('text=Decoding…').or(page.locator('🔄')))
+    ).toBeVisible({ timeout: 120000 });
   });
 
   test('gallery images load without broken src', async ({ page }) => {

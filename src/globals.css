@@ -1,19 +1,43 @@
 @import "tailwindcss";
 
 :root {
-  --color-primary: #667eea;
-  --color-primary-dark: #5568d3;
-  --color-green: #4caf50;
-  --color-green-dark: #45a049;
+  --color-primary: #7c8cf8;
+  --color-primary-dark: #6474f0;
+  --color-surface-border: rgba(255, 255, 255, 0.09);
 }
 
+/* ── Starfield canvas sits behind everything ── */
+#stars-canvas {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* ── Body ── */
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", sans-serif;
   -webkit-font-smoothing: antialiased;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #070b18;
   min-height: 100vh;
+  color: #e2e8f0;
 }
 
+#root {
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Glass card ── */
+.glass {
+  background: rgba(10, 18, 40, 0.82);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--color-surface-border);
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.45);
+}
+
+/* ── Spinner ── */
 @keyframes spin {
   to {
     transform: rotate(360deg);
@@ -21,15 +45,16 @@ body {
 }
 
 .spinner {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   margin: 0 auto 1rem;
-  border: 4px solid rgba(102, 126, 234, 0.2);
+  border: 3px solid rgba(124, 140, 248, 0.18);
   border-top-color: var(--color-primary);
   border-radius: 50%;
-  animation: spin 1s linear infinite;
+  animation: spin 0.9s linear infinite;
 }
 
+/* ── Diagnostics layout ── */
 .diag-grid {
   display: grid;
   grid-template-columns: 130px 1fr;
@@ -37,15 +62,31 @@ body {
   align-items: center;
 }
 
+/* ── Quality badges ── */
 .quality-good {
-  background: #d3f9d8;
-  color: #2f9e44;
+  background: rgba(52, 211, 153, 0.14);
+  color: #6ee7b7;
+  border: 1px solid rgba(52, 211, 153, 0.28);
 }
 .quality-warn {
-  background: #fff3bf;
-  color: #e67700;
+  background: rgba(251, 191, 36, 0.14);
+  color: #fcd34d;
+  border: 1px solid rgba(251, 191, 36, 0.28);
 }
 .quality-bad {
-  background: #ffe3e3;
-  color: #c92a2a;
+  background: rgba(248, 113, 113, 0.14);
+  color: #fca5a5;
+  border: 1px solid rgba(248, 113, 113, 0.28);
+}
+
+/* ── Subtle scrollbar ── */
+::-webkit-scrollbar {
+  width: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(124, 140, 248, 0.28);
+  border-radius: 3px;
 }

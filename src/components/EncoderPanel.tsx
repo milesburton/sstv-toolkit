@@ -13,6 +13,22 @@ interface EncodeResult {
   fileSize: string;
 }
 
+const ImageIcon = () => (
+  <svg
+    width="48"
+    height="48"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.25"
+  >
+    <title>Image file</title>
+    <rect x="3" y="3" width="18" height="18" rx="2" />
+    <circle cx="8.5" cy="8.5" r="1.5" />
+    <polyline points="21 15 16 10 5 21" />
+  </svg>
+);
+
 export function EncoderPanel() {
   const [selectedMode, setSelectedMode] = useState('ROBOT36');
   const [processing, setProcessing] = useState(false);
@@ -71,86 +87,90 @@ export function EncoderPanel() {
 
   return (
     <div className="bg-transparent">
-      <div className="text-center mb-6 pb-4 border-b-2 border-gray-200">
-        <h2 className="text-primary text-2xl font-semibold mb-2">🖼️ Encoder</h2>
-        <p className="text-gray-500 text-sm">Image → SSTV Audio</p>
+      <div className="text-center mb-6 pb-5 border-b border-white/10">
+        <h2 className="text-white text-xl font-semibold mb-1 tracking-wide">Encoder</h2>
+        <p className="text-white/40 text-xs uppercase tracking-widest">Image → SSTV Audio</p>
       </div>
 
-      <div className="mb-6 text-center">
-        <label className="flex items-center justify-center gap-3 text-sm text-gray-700 font-semibold">
-          SSTV Mode:
-          <select
-            value={selectedMode}
-            onChange={(e) => setSelectedMode(e.target.value)}
-            className="px-4 py-2 text-sm border-2 border-gray-200 bg-white text-gray-700 rounded-md cursor-pointer focus:outline-none focus:border-primary"
-          >
-            {Object.entries(SSTV_MODES).map(([key, mode]) => (
-              <option key={key} value={key}>
-                {mode.name} ({mode.width}×{mode.lines})
-              </option>
-            ))}
-          </select>
+      <div className="mb-5 flex items-center justify-center gap-3 text-sm">
+        <label
+          className="text-white/50 text-xs uppercase tracking-wider font-medium"
+          htmlFor="mode-select"
+        >
+          SSTV Mode
         </label>
+        <select
+          id="mode-select"
+          value={selectedMode}
+          onChange={(e) => setSelectedMode(e.target.value)}
+          className="px-3 py-1.5 text-sm bg-white/[0.06] border border-white/15 text-white/80 rounded-lg cursor-pointer focus:outline-none focus:border-primary transition-colors"
+        >
+          {Object.entries(SSTV_MODES).map(([key, mode]) => (
+            <option key={key} value={key}>
+              {mode.name} ({mode.width}×{mode.lines})
+            </option>
+          ))}
+        </select>
       </div>
 
       <DropZone
         accept="image/*"
         onFile={handleFile}
         processing={processing}
-        icon="🖼️"
+        icon={<ImageIcon />}
         hint="JPG, PNG, GIF, WebP"
         inputId="encode-input"
       />
 
       {preview && !result && (
         <div className="my-4 text-center">
-          <img src={preview} alt="Preview" className="max-w-full max-h-48 rounded-lg shadow-sm" />
+          <img src={preview} alt="Preview" className="max-w-full max-h-48 rounded-lg opacity-90" />
         </div>
       )}
 
       {error && (
-        <div className="bg-red-50 border-2 border-red-200 rounded-lg p-4 my-4 text-red-600 text-center text-sm">
-          ❌ {error}
+        <div className="border border-red-500/30 bg-red-500/10 rounded-lg p-3 my-4 text-red-400 text-center text-sm">
+          {error}
         </div>
       )}
 
       {result && (
-        <div className="bg-gray-50 rounded-lg p-6 mt-4">
-          <h3 className="text-green-700 mb-4 text-lg font-semibold text-center">
-            ✅ Encoded Successfully
+        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-5 mt-4">
+          <h3 className="text-emerald-400 mb-4 text-sm font-semibold text-center uppercase tracking-wider">
+            Encoded successfully
           </h3>
-          <audio controls src={result.url} className="w-full mb-4" />
+          <audio controls src={result.url} className="w-full mb-4 opacity-80" />
           <div className="flex gap-3 justify-center mt-4">
             <button
               onClick={download}
-              className="px-5 py-2 text-sm font-semibold bg-green-500 text-white rounded-md hover:bg-green-600 hover:-translate-y-0.5 transition-all"
+              className="px-5 py-2 text-sm font-semibold bg-emerald-600 text-white rounded-lg hover:bg-emerald-500 hover:-translate-y-0.5 transition-all"
             >
-              💾 Download WAV
+              Download WAV
             </button>
             <button
               onClick={reset}
-              className="px-5 py-2 text-sm font-semibold bg-gray-500 text-white rounded-md hover:bg-gray-600 hover:-translate-y-0.5 transition-all"
+              className="px-5 py-2 text-sm font-semibold bg-white/10 text-white/70 rounded-lg hover:bg-white/15 transition-all"
             >
-              🔄 Encode Another
+              Encode Another
             </button>
           </div>
-          <div className="mt-4 border border-gray-200 rounded-lg overflow-hidden text-xs bg-gray-50">
-            <div className="w-full bg-gray-100 px-3 py-2 text-xs font-semibold text-gray-600">
-              🔬 Encode Info
+          <div className="mt-4 border border-white/10 rounded-lg overflow-hidden text-xs">
+            <div className="px-3 py-2 bg-white/[0.04] text-white/40 text-xs font-semibold uppercase tracking-wider">
+              Encode Info
             </div>
-            <div className="p-3 diag-grid">
-              <span className="text-gray-400">Mode</span>
-              <span className="font-mono text-gray-800">{result.mode}</span>
-              <span className="text-gray-400">Resolution</span>
-              <span className="font-mono text-gray-800">
+            <div className="p-3 diag-grid text-xs">
+              <span className="text-white/35">Mode</span>
+              <span className="font-mono text-white/70">{result.mode}</span>
+              <span className="text-white/35">Resolution</span>
+              <span className="font-mono text-white/70">
                 {result.width}×{result.lines}
               </span>
-              <span className="text-gray-400">Color</span>
-              <span className="font-mono text-gray-800">{result.colorFormat}</span>
-              <span className="text-gray-400">Duration</span>
-              <span className="font-mono text-gray-800">{result.expectedDuration}</span>
-              <span className="text-gray-400">File size</span>
-              <span className="font-mono text-gray-800">{result.fileSize}</span>
+              <span className="text-white/35">Color</span>
+              <span className="font-mono text-white/70">{result.colorFormat}</span>
+              <span className="text-white/35">Duration</span>
+              <span className="font-mono text-white/70">{result.expectedDuration}</span>
+              <span className="text-white/35">File size</span>
+              <span className="font-mono text-white/70">{result.fileSize}</span>
             </div>
           </div>
         </div>

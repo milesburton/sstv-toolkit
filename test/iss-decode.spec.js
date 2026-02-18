@@ -11,7 +11,12 @@ function findWavDataOffset(buffer) {
   const view = new DataView(buffer);
   let offset = 12;
   while (offset + 8 <= buffer.byteLength) {
-    const id = String.fromCharCode(view.getUint8(offset), view.getUint8(offset + 1), view.getUint8(offset + 2), view.getUint8(offset + 3));
+    const id = String.fromCharCode(
+      view.getUint8(offset),
+      view.getUint8(offset + 1),
+      view.getUint8(offset + 2),
+      view.getUint8(offset + 3)
+    );
     const size = view.getUint32(offset + 4, true);
     if (id === 'data') return offset + 8;
     offset += 8 + size;
